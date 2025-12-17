@@ -7,15 +7,27 @@ local CHIPPOS = chip():getPos()
 
 -- Constants --
 local GRAVITY = 20
-local SPEED = 800
-local SLIDESPEED = 1000
+local SPEED = 500
+local SLIDESPEED = 800
 local SLIDEMOVESPEED = 100
-local DASHSPEED = 7000
-local DASHDURATION = 0.05
+local DASHSPEED = 30000
+local DASHDURATION = 0.1
+local DASHJUMPSPEED = 20
+local DASHJUMPHEIGHT = 20
 local SLAMSPEED = 2000
+local JUMP = 500
 local CAMERAHEIGHT = {
     DEFAULT = 60,
     SLIDE = 20
+}
+
+---@enum STATES
+local STATES = {
+    Idle = 0,
+    Slam = 1,
+    Dash = 2,
+    DashJump = 3,
+    Slide = 4
 }
 
 if SERVER then
@@ -25,6 +37,8 @@ if SERVER then
     ---@module "astricunion.libs.hitbox"
     local hitbox = require("hitbox")
     ]]
+    --@include https://raw.githubusercontent.com/AstricUnion/Libs/refs/heads/main/tweens.lua as tweens
+    require("tweens")
 
     ---Mankind is dead. Blood is fuel. Hell is full.
     ---@class V1
@@ -32,8 +46,10 @@ if SERVER then
     ---@field physobj PhysObj
     ---@field seat Vehicle
     ---@field camera Entity
+    ---@field state STATES
     ---@field movementVelocity Vector
     ---@field slideDirection? Vector
+    ---@field dashDirection? Vector
     ---@field driver? Player
     local V1 = {}
     V1.__index = V1
@@ -58,8 +74,12 @@ if SERVER then
                 physobj = physobj,
                 seat = seat,
                 camera = camera,
+                state = STATES.Idle,
+
                 movementVelocity = Vector(),
+                lastVelocity = Vector(),
                 slideDirection = nil,
+                dashDirection = nil,
                 driver = nil
             },
             V1
@@ -103,7 +123,7 @@ if SERVER then
         local pos = self.body:getPos()
         return trace.hull(
             pos,
-            pos - Vector(0, 0, 8),
+            pos - Vector(0, 0, 5),
             Vector(-12, -12, 0),
             Vector(12, 12, 10),
             {self.body}
@@ -111,47 +131,64 @@ if SERVER then
     end
 
 
-    function V1:startSlide()
+    ---Get control direction. This direction is like dash direction or slide direction
+    ---@return Vector?
+    function V1:getControlDirection()
         local angs = self.driver:getEyeAngles():setP(0)
         local axis = self:getControlAxis()
         if !axis then return end
-        if axis:getLength() == 0 then
-            axis = Vector(1, 0, 0)
-        end
-        self.slideDirection = angs:getForward() * axis.x + angs:getRight() * -axis.y
+        if axis:getLength() == 0 then axis = Vector(1, 0, 0) end
+        return angs:getForward() * axis.x + angs:getRight() * -axis.y
+    end
+
+
+    function V1:startSlide()
+        if self.state == STATES.Slide then return end
         local isOnGround = self:isOnGround()
         local gravity = Vector(0, 0, !isOnGround and (self.body:getVelocity().z - GRAVITY) or 0)
-        self.physobj:setVelocity(self.slideDirection * 1000 + gravity + self.slideDirection:getRotated(Angle(0, 90, 0)) * axis.y * 100)
+        self.slideDirection = self:getControlDirection()
+        if !self.slideDirection then return end
+        self.physobj:setVelocity(self.slideDirection * 1000 + gravity)
         self.camera:setPos(self.body:getPos() + Vector(0, 0, CAMERAHEIGHT.SLIDE))
+        self.state = STATES.Slide
     end
 
 
     function V1:stopSlide()
+        if self.state ~= STATES.Slide then return end
         self.slideDirection = nil
         if self:isOnGround() then
             self.physobj:setVelocity(Vector(0, 0, 0))
         end
         self.camera:setPos(self.body:getPos() + Vector(0, 0, CAMERAHEIGHT.DEFAULT))
+        self.state = STATES.Idle
     end
 
 
     function V1:Think()
         self.physobj:setAngleVelocity(Vector())
-        local isOnGround = self:isOnGround()
-        local gravity = Vector(0, 0, !isOnGround and (self.body:getVelocity().z - GRAVITY) or 0)
         local axis = self:getControlAxis()
         if !axis then return end
         local angs = self.driver:getEyeAngles():setP(0)
-        if !self.slideDirection then
+        local isOnGround = self:isOnGround()
+        if self.state == STATES.Idle then
             local axisRotated = axis:getRotated(angs)
-            self.movementVelocity = math.lerpVector(0.3, self.movementVelocity, axisRotated * SPEED / (isOnGround and 1 or 2))
-            self.physobj:setVelocity(self.movementVelocity + gravity)
-        else
-            if self.physobj:getVelocity():setZ(0):getLength() < 200 then
+            if !isOnGround then
+                self.physobj:addVelocity(Vector(0, 0, -GRAVITY) + axisRotated * 12)
+            else
+                self.movementVelocity = math.lerpVector(0.5, self.movementVelocity, axisRotated * SPEED)
+                self.physobj:setVelocity(self.movementVelocity)
+            end
+        elseif self.state == STATES.Slide then
+            local vel = self.physobj:getVelocity()
+            if vel:getLength() < 100 then
                 self:stopSlide()
                 return
             end
-            self.physobj:setVelocity(self.slideDirection * SLIDESPEED + gravity + self.slideDirection:getRotated(Angle(0, 90, 0)) * axis.y * SLIDEMOVESPEED)
+            local slide = self.slideDirection * SLIDESPEED
+            local move = (-angs:getRight() * axis.y * SLIDEMOVESPEED)
+            local gravity = Vector(0, 0, vel.z - GRAVITY)
+            self.physobj:setVelocity(slide + move + gravity)
         end
     end
 
@@ -180,37 +217,55 @@ if SERVER then
         local isOnGround = self:isOnGround()
 
         -- Jump
-        if key == IN_KEY.JUMP and isOnGround and !self.slideDirection then
-            self.physobj:addVelocity(Vector(0, 0, 500))
+        if key == IN_KEY.JUMP and isOnGround then
+            self:stopSlide()
+            -- Dash jump
+            if self.state == STATES.Dash then
+                self.state = STATES.Idle
+                self.physobj:addVelocity(self.dashDirection * DASHJUMPSPEED + Vector(0, 0, JUMP))
+            else
+                self.physobj:addVelocity(Vector(0, 0, JUMP))
+            end
 
         -- Slam
-        elseif key == IN_KEY.DUCK and !isOnGround and !self.slideDirection then
+        elseif key == IN_KEY.DUCK and !isOnGround and self.state ~= STATES.Slide and self.state ~= STATES.Slam then
+            self.state = STATES.Slam
             timer.create("slam", 0, 0, function()
                 self.physobj:setVelocity(Vector(0, 0, -SLAMSPEED))
                 if self:isOnGround() then
                     self.physobj:setVelocity(Vector(0, 0, 0))
                     net.start("shake")
                     net.send(self.driver)
+                    self.state = STATES.Idle
                     timer.remove("slam")
                 end
             end)
 
-        -- Slide
-        elseif key == IN_KEY.DUCK and isOnGround and !self.slideDirection then
-            self:startSlide()
-
         -- Dash
-        elseif key == IN_KEY.SPEED and !self.slideDirection then
-            local angs = self.driver:getEyeAngles():setP(0)
-            local axis = self:getControlAxis()
-            if !axis then return end
-            if axis:getLength() == 0 then
-                axis = Vector(1, 0, 0)
-            end
-            local dashDirection = angs:getForward() * axis.x + angs:getRight() * -axis.y
-            timer.create("dash", 0, DASHDURATION / 0.01, function()
-                self.physobj:addVelocity(dashDirection * DASHSPEED)
-            end)
+        elseif key == IN_KEY.SPEED and self.state ~= STATES.Dash then
+            self.dashDirection = self:getControlDirection()
+            if !self.dashDirection then return end
+            self:stopSlide()
+            local tw = Tween:new()
+            tw:add(
+                Fraction:new(DASHDURATION, nil,
+                    function()
+                        if self.state == STATES.Idle then return end
+                        self.physobj:setVelocity(Vector(0, 0, 0))
+                        self.state = STATES.Idle
+                    end,
+                    function(t)
+                        if self.state == STATES.Idle then t:remove() return end
+                        self.physobj:setVelocity(self.dashDirection * DASHSPEED)
+                    end
+                )
+            )
+            tw:start()
+            self.state = STATES.Dash
+
+        -- Slide
+        elseif key == IN_KEY.DUCK and isOnGround and self.state ~= STATES.Slide then
+            self:startSlide()
         end
     end
 
@@ -218,7 +273,7 @@ if SERVER then
     function V1:KeyRelease(ply, key)
         if ply ~= self.driver then return end
         -- Slide
-        if key == IN_KEY.DUCK and self.slideDirection then
+        if key == IN_KEY.DUCK then
             self:stopSlide()
         end
     end
