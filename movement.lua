@@ -12,8 +12,7 @@ local SLIDESPEED = 800
 local SLIDEMOVESPEED = 100
 local DASHSPEED = 30000
 local DASHDURATION = 0.1
-local DASHJUMPSPEED = 20
-local DASHJUMPHEIGHT = 20
+local DASHJUMPSPEED = 800
 local SLAMSPEED = 2000
 local JUMP = 500
 local CAMERAHEIGHT = {
@@ -47,6 +46,7 @@ if SERVER then
     ---@field seat Vehicle
     ---@field camera Entity
     ---@field state STATES
+    ---@field dashRemain number
     ---@field movementVelocity Vector
     ---@field slideDirection? Vector
     ---@field dashDirection? Vector
@@ -123,9 +123,9 @@ if SERVER then
         local pos = self.body:getPos()
         return trace.hull(
             pos,
-            pos - Vector(0, 0, 5),
-            Vector(-12, -12, 0),
-            Vector(12, 12, 10),
+            pos - Vector(0, 0, 10),
+            Vector(-14, -14, 0),
+            Vector(14, 14, 50),
             {self.body}
         ).Hit
     end
@@ -222,7 +222,7 @@ if SERVER then
             -- Dash jump
             if self.state == STATES.Dash then
                 self.state = STATES.Idle
-                self.physobj:addVelocity(self.dashDirection * DASHJUMPSPEED + Vector(0, 0, JUMP))
+                self.physobj:setVelocity(self.dashDirection * DASHJUMPSPEED + Vector(0, 0, JUMP))
             else
                 self.physobj:addVelocity(Vector(0, 0, JUMP))
             end
