@@ -1,7 +1,6 @@
 ---@name ULTRAKILL
 ---@author AstricUnion
 ---@shared
----@owneronly
 ---@include ultrakill/model.lua
 ---@include https://raw.githubusercontent.com/AstricUnion/Libs/refs/heads/main/hitbox.lua as hitbox
 ---@include https://raw.githubusercontent.com/AstricUnion/Libs/refs/heads/main/tweens.lua as tweens
@@ -9,7 +8,7 @@
 local CHIPPOS = chip():getPos()
 
 -- Constants --
-local GRAVITY = 10
+local GRAVITY = 20
 local SPEED = 500
 local SLIDESPEED = 800
 local SLIDEMOVESPEED = 100
@@ -73,6 +72,7 @@ if SERVER then
         model.Main:setParent(body)
         local camera = hologram.create(pos + Vector(0, 0, CAMERAHEIGHT.DEFAULT), Angle(), "models/holograms/cube.mdl")
         if !camera then return end
+        camera:setNoDraw(true)
         camera:setParent(body)
         local obj = setmetatable(
             {
@@ -99,7 +99,7 @@ if SERVER then
     function V1:initHooks()
         local id = "V1" .. tostring(self.body:entIndex())
         local hooks = {
-            "Think",
+            "Tick",
             "PlayerEnteredVehicle",
             "PlayerLeaveVehicle",
             "KeyPress",
@@ -172,13 +172,15 @@ if SERVER then
     end
 
 
-    function V1:Think()
+    function V1:Tick()
         self.physobj:setAngleVelocity(Vector())
         self.physobj:setAngles(Angle())
         local axis = self:getControlAxis()
         if !axis then return end
-        local angs = self.driver:getEyeAngles():setP(0)
-        self.model.Main:setAngles(angs)
+        local rawAngs = self.driver:getEyeAngles()
+        self.model.Head:setAngles(Angle(rawAngs.p / 4, rawAngs.y, 0))
+        local angs = rawAngs:setP(0)
+        self.model.Main:setLocalAngles(math.lerpAngle(0.2, self.model.Main:getLocalAngles(), angs))
         local isOnGround = self:isOnGround()
         if self.state == STATES.Idle then
             local axisRotated = axis:getRotated(angs)
@@ -207,6 +209,7 @@ if SERVER then
         ply:setViewEntity(self.camera)
         net.start("StartV1")
         net.writeEntity(self.camera)
+        net.writeTable(self.model)
         net.send(ply)
     end
 
@@ -216,7 +219,6 @@ if SERVER then
         ply:setViewEntity(nil)
         enableHud(ply, false)
         net.start("StopV1")
-        net.writeEntity(self.camera)
         net.send(ply)
     end
 
@@ -258,12 +260,12 @@ if SERVER then
             tw:add(
                 Fraction:new(DASHDURATION, nil,
                     function()
-                        if self.state == STATES.Idle then return end
+                        if self.state ~= STATES.Dash then return end
                         self.physobj:setVelocity(Vector(0, 0, 0))
                         self.state = STATES.Idle
                     end,
                     function(t)
-                        if self.state == STATES.Idle then t:remove() return end
+                        if self.state ~= STATES.Dash then t:remove() return end
                         self.physobj:setVelocity(self.dashDirection * DASHSPEED)
                     end
                 )
@@ -292,23 +294,66 @@ if SERVER then
 else
     require("ultrakill/model.lua")
     local PLAYER = player()
+    local model
     local shakeOffset = Vector()
-    local slope = 0
+    render.createRenderTarget("HUD")
+    local hudMat = material.create("VertexLitGeneric")
+    hudMat:setInt("$flags", 256)
+    hudMat:setTextureRenderTarget("$basetexture", "HUD")
+    local hudHolo = hologram.create(CHIPPOS, Angle(), "models/holograms/plane.mdl", Vector(0.4, 0.4, 0.4))
+    if !hudHolo then return end
+    hudHolo:suppressEngineLighting(true)
+    hudHolo:setSubMaterial(0, "!" .. hudMat:getName())
+    hudHolo:setColor(Color():setA(200))
+
+    local function noDrawModel(modelTable, nodraw)
+        for _, holo in pairs(modelTable) do
+            if tostring(getmetatable(holo)) ~= "Entity" then
+                noDrawModel(holo, nodraw)
+                continue
+            end
+            local children = holo:getChildren()
+            for _, child in ipairs(children) do
+                if child:getModel() == "models/hunter/plates/plate.mdl" then continue end
+                child:setNoDraw(nodraw)
+            end
+        end
+    end
+
     net.receive("StartV1", function()
         net.readEntity(function(camera)
+            model = net.readTable()
+            noDrawModel(model, true)
             hook.add("CalcView", "V1Camera", function()
-                local angs = PLAYER:getEyeAngles()
-                slope = math.lerp(0.3, slope, (PLAYER:keyDown(IN_KEY.MOVELEFT) and 1 or 0) - (PLAYER:keyDown(IN_KEY.MOVERIGHT) and 1 or 0))
+                local slope = (PLAYER:keyDown(IN_KEY.MOVELEFT) and 1 or 0) - (PLAYER:keyDown(IN_KEY.MOVERIGHT) and 1 or 0)
+                local angs = PLAYER:getEyeAngles() + Angle(0, 0, slope * -1)
+                local pos = camera:getPos() + shakeOffset
+                hudHolo:setPos(pos + angs:getForward() * 5 + angs:getRight() * -4 + angs:getUp() * -2)
+                hudHolo:setAngles(angs + Angle(-90, 0, 20))
                 return {
-                    origin = camera:getPos() + shakeOffset + Vector(0, slope, 0):getRotated(angs),
-                    angles = angs + Angle(0, 0, slope * -2)
+                    origin = pos,
+                    angles = angs
                 }
+            end)
+
+            hook.add("RenderOffscreen", "Hud", function()
+                render.selectRenderTarget("HUD")
+                do
+                    render.clear(Color(0, 0, 0, 0))
+                    render.setColor(Color(0, 0, 0))
+                    render.drawRoundedBox(12, 8, 256, 956, 500)
+                    render.setColor(Color())
+                end
+                render.selectRenderTarget()
             end)
         end)
     end)
 
     net.receive("StopV1", function()
+        noDrawModel(model, false)
+        model = {}
         hook.remove("CalcView", "V1Camera")
+        hook.remove("RenderOffscreen", "Hud")
     end)
 
     net.receive("shake", function()
