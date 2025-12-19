@@ -70,28 +70,32 @@ else
     local texture = material.create("VertexLitGeneric")
     texture:setTextureURL("$basetexture", "https://www.dl.dropboxusercontent.com/scl/fi/da761zq8b7lbwzxb2dzqp/mainScaled.png?rlkey=auhx4anmxzxevugseysql1moq&st=yu7iwp7g&dl=1")
 
-    local objdata = file.readInGame("data/starfall/ultrakill/models/v1.obj")
-    if !objdata then return end
+    http.get(
+        "https://raw.githubusercontent.com/AstricUnion/ULTRAKILL/refs/heads/main/models/v1.obj",
+        function(obj)
+            if !obj then return end
+            local loadmesh = coroutine.wrap(function()
+                model = mesh.createFromObj(obj, true)
+                return true
+            end)
 
-    local loadmesh = coroutine.wrap(function()
-        model = mesh.createFromObj(objdata, true)
-        return true
-    end)
-
-    local CHIP = chip()
-    hook.add("Think", "LoadModel",function()
-        while CHIP:getQuotaAverage() < CHIP:getQuotaMax() / 2 do
-            if loadmesh() then
-                for id, holo in pairs(createdHolos) do
-                    holo:setMesh(model[id])
-                    holo:setMeshMaterial(texture)
+            local CHIP = chip()
+            hook.add("Think", "LoadModel",function()
+                while CHIP:getQuotaAverage() < CHIP:getQuotaMax() / 2 do
+                    if loadmesh() then
+                        for id, holo in pairs(createdHolos) do
+                            holo:setMesh(model[id])
+                            holo:setMeshMaterial(texture)
+                        end
+                        createdHolos = {}
+                        hook.remove("Think","LoadModel")
+                        return
+                    end
                 end
-                createdHolos = {}
-                hook.remove("Think","LoadModel")
-                return
-            end
+            end)
         end
-    end)
+    )
+
 
     hook.add("HoloInitialized", "", function(id, holo)
         if !model then
