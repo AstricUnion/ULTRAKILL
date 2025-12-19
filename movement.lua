@@ -2,11 +2,14 @@
 ---@author AstricUnion
 ---@shared
 ---@owneronly
+---@include ultrakill/model.lua
+---@include https://raw.githubusercontent.com/AstricUnion/Libs/refs/heads/main/hitbox.lua as hitbox
+---@include https://raw.githubusercontent.com/AstricUnion/Libs/refs/heads/main/tweens.lua as tweens
 
 local CHIPPOS = chip():getPos()
 
 -- Constants --
-local GRAVITY = 20
+local GRAVITY = 10
 local SPEED = 500
 local SLIDESPEED = 800
 local SLIDEMOVESPEED = 100
@@ -16,8 +19,8 @@ local DASHJUMPSPEED = 800
 local SLAMSPEED = 2000
 local JUMP = 500
 local CAMERAHEIGHT = {
-    DEFAULT = 60,
-    SLIDE = 20
+    DEFAULT = 70,
+    SLIDE = 30
 }
 
 ---@enum STATES
@@ -31,18 +34,17 @@ local STATES = {
 
 if SERVER then
     --[[
-    ---@include https://raw.githubusercontent.com/AstricUnion/Libs/refs/heads/main/hitbox.lua as hitbox
     ---@class hitbox
     ---@module "astricunion.libs.hitbox"
     local hitbox = require("hitbox")
     ]]
-    --@include https://raw.githubusercontent.com/AstricUnion/Libs/refs/heads/main/tweens.lua as tweens
     require("tweens")
 
     ---Mankind is dead. Blood is fuel. Hell is full.
     ---@class V1
     ---@field body Entity
     ---@field physobj PhysObj
+    ---@field model table[Hologram]
     ---@field seat Vehicle
     ---@field camera Entity
     ---@field state STATES
@@ -65,6 +67,10 @@ if SERVER then
         body:setMass(1000)
         body:enableGravity(false)
         body:setColor(Color(0, 0, 0, 0))
+        ---@module 'ultrakill.model'
+        local model = require("ultrakill/model.lua")
+        model.Main:setPos(pos)
+        model.Main:setParent(body)
         local camera = hologram.create(pos + Vector(0, 0, CAMERAHEIGHT.DEFAULT), Angle(), "models/holograms/cube.mdl")
         if !camera then return end
         camera:setParent(body)
@@ -72,6 +78,7 @@ if SERVER then
             {
                 body = body,
                 physobj = physobj,
+                model = model,
                 seat = seat,
                 camera = camera,
                 state = STATES.Idle,
@@ -123,7 +130,7 @@ if SERVER then
         local pos = self.body:getPos()
         return trace.hull(
             pos,
-            pos - Vector(0, 0, 10),
+            pos - Vector(0, 0, 8),
             Vector(-14, -14, 0),
             Vector(14, 14, 50),
             {self.body}
@@ -167,17 +174,18 @@ if SERVER then
 
     function V1:Think()
         self.physobj:setAngleVelocity(Vector())
+        self.physobj:setAngles(Angle())
         local axis = self:getControlAxis()
         if !axis then return end
         local angs = self.driver:getEyeAngles():setP(0)
+        self.model.Main:setAngles(angs)
         local isOnGround = self:isOnGround()
         if self.state == STATES.Idle then
             local axisRotated = axis:getRotated(angs)
             if !isOnGround then
                 self.physobj:addVelocity(Vector(0, 0, -GRAVITY) + axisRotated * 12)
             else
-                self.movementVelocity = math.lerpVector(0.5, self.movementVelocity, axisRotated * SPEED)
-                self.physobj:setVelocity(self.movementVelocity)
+                self.physobj:setVelocity(axisRotated * SPEED)
             end
         elseif self.state == STATES.Slide then
             local vel = self.physobj:getVelocity()
@@ -282,6 +290,7 @@ if SERVER then
     local seat = prop.createSeat(CHIPPOS, Angle(), "models/nova/chair_plastic01.mdl", true)
     local v1 = V1:new(CHIPPOS + Vector(50, 0, 0), seat)
 else
+    require("ultrakill/model.lua")
     local PLAYER = player()
     local shakeOffset = Vector()
     local slope = 0
