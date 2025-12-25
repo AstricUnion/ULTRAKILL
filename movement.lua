@@ -46,8 +46,8 @@ if SERVER then
     hook.add("ClientInitialized", "Sounds", function(ply)
         astrosounds.preload(
             ply,
-            Sound:new("jump", 1, false, sounds .. "Jump.wav"),
-            Sound:new("dodge", 1, false, sounds .. "Dodge3.mp3")
+            Sound:new("jump", 1, false, sounds .. "Jump.mp3"),
+            Sound:new("dash", 1, false, sounds .. "Dodge3.mp3")
         )
     end)
 
@@ -270,6 +270,7 @@ if SERVER then
             self.dashDirection = self:getControlDirection()
             if !self.dashDirection then return end
             self:stopSlide()
+            astrosounds.play("dash", Vector(), self.body)
             local tw = Tween:new()
             tw:add(
                 Fraction:new(DASHDURATION, nil,
