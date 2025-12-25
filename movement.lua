@@ -4,8 +4,10 @@
 ---@include ultrakill/model.lua
 ---@include https://raw.githubusercontent.com/AstricUnion/Libs/refs/heads/main/hitbox.lua as hitbox
 ---@include https://raw.githubusercontent.com/AstricUnion/Libs/refs/heads/main/tweens.lua as tweens
+---@include https://raw.githubusercontent.com/AstricUnion/Libs/refs/heads/main/sounds.lua as sounds
 
 local CHIPPOS = chip():getPos()
+local astrosounds = require("sounds")
 
 -- Constants --
 local GRAVITY = 20
@@ -38,6 +40,17 @@ if SERVER then
     local hitbox = require("hitbox")
     ]]
     require("tweens")
+
+
+    local sounds = "https://raw.githubusercontent.com/AstricUnion/ULTRAKILL/refs/heads/main/sounds/"
+    hook.add("ClientInitialized", "Sounds", function(ply)
+        astrosounds.preload(
+            ply,
+            Sound:new("jump", 1, false, sounds .. "Jump.wav"),
+            Sound:new("dodge", 1, false, sounds .. "Dodge3.mp3")
+        )
+    end)
+
 
     ---Mankind is dead. Blood is fuel. Hell is full.
     ---@class V1
@@ -235,6 +248,7 @@ if SERVER then
                 self.physobj:setVelocity(self.dashDirection * DASHJUMPSPEED + Vector(0, 0, JUMP))
             else
                 self.physobj:addVelocity(Vector(0, 0, JUMP))
+                astrosounds.play("jump", Vector(), self.body)
             end
 
         -- Slam

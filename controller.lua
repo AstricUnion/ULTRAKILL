@@ -6,29 +6,8 @@
 local GRAVITY = 980
 
 if SERVER then
-    ---Cube-formed hitbox. Modified from hitbox lib: https://raw.githubusercontent.com/AstricUnion/Libs/refs/heads/main/hitbox.lua
-    ---@param pos Vector Position of hitbox
-    ---@param angle Angle Angle of hitbox
-    ---@param size Vector Size of hitbox
-    ---@param freeze boolean? Make hitbox freezed, default false
-    ---@return Entity hitbox Hitbox entity
-    local function createHitbox(pos, angle, size, freeze)
-        local actualSize = size / 2
-        local pr = prop.createCustom(pos, angle,
-            {{
-                Vector(-actualSize.x, -actualSize.y, 0), Vector(actualSize.x, -actualSize.y, 0),
-                Vector(actualSize.x, actualSize.y, 0), Vector(-actualSize.x, actualSize.y, 0),
-                Vector(-actualSize.x, -actualSize.y, size.z), Vector(actualSize.x, -actualSize.y, size.z),
-                Vector(actualSize.x, actualSize.y, size.z), Vector(-actualSize.x, actualSize.y, size.z),
-            }},
-            freeze
-        )
-        return pr
-    end
-
     ---@class PlayerController
     ---@field body Entity
-    ---@field physobj PhysObj
     ---@field seat Vehicle
     ---@field camera Hologram
     ---@field cameraHeight number
@@ -44,13 +23,7 @@ if SERVER then
     ---@param size Vector
     ---@return PlayerController?
     function PlayerController:new(pos, seat, cameraHeight, size)
-        local body = createHitbox(pos, Angle(), size, false)
-        local physobj = body:getPhysicsObject()
-        physobj:setMass(1000)
-        physobj:setMaterial("Player")
-        physobj:enableGravity(false)
-        constraint.keepupright(body, Angle(), 0, 10000)
-
+        local body = hologram.create(pos, Angle(), "models/editor/playerstart.mdl")
         local camera = hologram.create(pos + Vector(0, 0, cameraHeight), Angle(), "models/editor/camera.mdl")
         if !camera then return end
         camera:setNoDraw(true)
@@ -62,7 +35,6 @@ if SERVER then
         local obj = setmetatable(
             {
                 body = body,
-                physobj = physobj,
                 seat = seat,
                 camera = camera,
                 cameraHeight = cameraHeight,
@@ -82,18 +54,59 @@ if SERVER then
     ---@return boolean
     function PlayerController:isOnGround()
         local pos = self.body:getPos()
-        return trace.hull(
-            pos,
-            pos - Vector(0, 0, 5),
+        local velocity = math.max(0, self:getVelocity().z)
+        local res = trace.hull(
+            pos + Vector(0, 0, 10),
+            pos - Vector(0, 0, velocity + 5),
+            self.box[1] / 3,
+            Vector(self.box[2].x, self.box[2].y, 0) / 3,
+            nil,
+            MASK.PLAYERSOLID,
+            COLLISION_GROUP.PLAYER_MOVEMENT
+        )
+        if res.Hit then
+            self.body:setPos(res.HitPos)
+        end
+        return res.Hit
+    end
+
+    ---Collision of controller
+    ---@return boolean, Vector?
+    function PlayerController:getCollisions()
+        local pos = self.body:getPos()
+        local hitPos, hitNormal, hitFraction = trace.intersectRayWithOBB(
+            pos + Vector(0, 0, 5),
+            Vector(0, 0, 0),
+            pos + Vector(0, 0, 5),
+            Angle(),
             self.box[1],
-            self.box[2],
-            {self.body}
-        ).Hit
+            self.box[2]
+        )
+        return hitPos ~= nil, hitNormal
+    end
+
+    ---Get velocity of controller
+    ---@return Vector
+    function PlayerController:getVelocity()
+        return self.body:getVelocity()
+    end
+
+    ---Set velocity to controller
+    ---@param vel Vector
+    function PlayerController:setVelocity(vel)
+        self.body:setVelocity(vel - self.body:getVelocity())
+        self:getCollisions()
+    end
+
+    ---Add velocity to controller
+    ---@param vel Vector
+    function PlayerController:addVelocity(vel)
+        self:setVelocity(vel)
     end
 
 
     ----- HOOKS -----
-  
+
     ---Initialize hooks for controller
     function PlayerController:initHooks()
         local id = "PlayerController" .. tostring(self.body:entIndex())
@@ -126,10 +139,8 @@ if SERVER then
 
     ---Think hook
     function PlayerController:Think()
-        self.physobj:setAngleVelocity(Vector())
-        self.physobj:setAngles(Angle())
         if !self:isOnGround() then
-            self.physobj:addVelocity(Vector(0, 0, -GRAVITY * game.getTickInterval()))
+            self:addVelocity(Vector(0, 0, -GRAVITY * game.getTickInterval()))
         else
             local speed = Vector()
             local axis = self:getControlAxis()
@@ -137,7 +148,7 @@ if SERVER then
                 local angs = self.driver:getEyeAngles():setP(0)
                 speed = axis:getRotated(angs) * 500
             end
-            self.physobj:setVelocity(speed)
+            self:setVelocity(speed)
         end
     end
 
