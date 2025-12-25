@@ -74,6 +74,12 @@ if SERVER then
     V1Model.LeftLeg.Hip:setParent(V1Model.Body)
     V1Model.RightLeg.Hip:setParent(V1Model.Body)
     V1Model.Body:setParent(V1Model.Main)
+    for _, wing in ipairs(V1Model.LeftWings) do
+        wing:setParent(V1Model.Body)
+    end
+    for _, wing in ipairs(V1Model.RightWings) do
+        wing:setParent(V1Model.Body)
+    end
 
     return V1Model
 else

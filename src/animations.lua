@@ -1,3 +1,5 @@
+---@name V1 animations
+---@author AstricUnion
 ---@include ultrakill/model.lua
 ---@module 'ultrakill.model'
 local model = require("ultrakill/model.lua")
