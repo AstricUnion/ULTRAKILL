@@ -2,7 +2,6 @@
 ---@author AstricUnion
 ---@shared
 ---@include ultrakill/src/model.lua
----@include https://raw.githubusercontent.com/AstricUnion/Libs/refs/heads/main/hitbox.lua as hitbox
 ---@include https://raw.githubusercontent.com/AstricUnion/Libs/refs/heads/main/tweens.lua as tweens
 ---@include https://raw.githubusercontent.com/AstricUnion/Libs/refs/heads/main/sounds.lua as sounds
 ---@include ultrakill/src/controller.lua
@@ -35,18 +34,13 @@ local STATES = {
 }
 
 if SERVER then
-    --[[
-    ---@class hitbox
-    ---@module "astricunion.libs.hitbox"
-    local hitbox = require("hitbox")
-    ]]
     require("tweens")
     ---@class PlayerController
     ---@module 'controller'
     local PlayerController = require("ultrakill/src/controller.lua")
 
 
-    local sounds = "https://raw.githubusercontent.com/AstricUnion/ultrakill/src/refs/heads/main/sounds/"
+    local sounds = "https://raw.githubusercontent.com/AstricUnion/ULTRAKILL/refs/heads/main/sounds/"
     hook.add("ClientInitialized", "Sounds", function(ply)
         astrosounds.preload(
             ply,
@@ -76,7 +70,7 @@ if SERVER then
     ---@param seat Vehicle
     ---@return V1?
     function V1:new(pos, seat)
-        local controller = PlayerController:new(pos, seat, CAMERAHEIGHT.DEFAULT, Vector(12, 12, 60))
+        local controller = PlayerController:new(pos, seat, CAMERAHEIGHT.DEFAULT, Vector(20, 20, 75))
         if !controller then return end
         ---@module 'ultrakill.model'
         local model = require("ultrakill/src/model.lua")
@@ -177,9 +171,11 @@ if SERVER then
         if self.state == STATES.Idle then
             local axisRotated = axis:getRotated(angs)
             if !isOnGround then
-                ctrl.isLanded = false
                 ctrl:addVelocity(Vector(0, 0, -GRAVITY) + axisRotated * 12)
             else
+                if ctrl:getVelocity().z < -20 and self.state ~= STATES.Slam then
+                    astrosounds.play("land", Vector(), ctrl.body)
+                end
                 ctrl:setVelocity(axisRotated * SPEED)
             end
 
@@ -200,14 +196,17 @@ if SERVER then
     function V1:jump(ctrl)
         if !ctrl:isOnGround() then return end
         self:stopSlide(ctrl)
+
         -- Dash jump
         if self.state == STATES.Dash then
             self.state = STATES.Idle
             ctrl:setVelocity(self.dashDirection * DASHJUMPSPEED + Vector(0, 0, JUMP))
+
         -- Just a jump
         else
             ctrl:addVelocity(Vector(0, 0, JUMP))
         end
+
         astrosounds.play("jump", Vector(), self.controller.body)
     end
 
@@ -241,7 +240,7 @@ if SERVER then
             Fraction:new(DASHDURATION, nil,
                 function()
                     if self.state ~= STATES.Dash then return end
-                    ctrl:setVelocity(Vector(0, 0, 0))
+                    ctrl:setVelocity(ctrl:getVelocity() / 12)
                     self.state = STATES.Idle
                 end,
                 function(t)
