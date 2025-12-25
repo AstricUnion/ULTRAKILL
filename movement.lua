@@ -47,7 +47,9 @@ if SERVER then
         astrosounds.preload(
             ply,
             Sound:new("jump", 1, false, sounds .. "Jump.mp3"),
-            Sound:new("dash", 1, false, sounds .. "Dodge3.mp3")
+            Sound:new("dash", 1, false, sounds .. "Dash.mp3"),
+            Sound:new("land", 1, false, sounds .. "Landing.mp3"),
+            Sound:new("landHeavy", 1, false, sounds .. "LandingHeavy.mp3")
         )
     end)
 
@@ -261,6 +263,7 @@ if SERVER then
                     net.start("shake")
                     net.send(self.driver)
                     self.state = STATES.Idle
+                    astrosounds.play("landingHeavy", Vector(), self.body)
                     timer.remove("slam")
                 end
             end)
