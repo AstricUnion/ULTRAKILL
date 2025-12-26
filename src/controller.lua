@@ -26,6 +26,7 @@ if SERVER then
             }},
             freeze
         )
+        pr:setNoDraw(true)
         return pr
     end
 

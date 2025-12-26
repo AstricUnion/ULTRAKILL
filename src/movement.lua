@@ -1,10 +1,11 @@
 ---@name ULTRAKILL
 ---@author AstricUnion
 ---@shared
----@include ultrakill/src/model.lua
 ---@include https://raw.githubusercontent.com/AstricUnion/Libs/refs/heads/main/tweens.lua as tweens
 ---@include https://raw.githubusercontent.com/AstricUnion/Libs/refs/heads/main/sounds.lua as sounds
 ---@include ultrakill/src/controller.lua
+---@include ultrakill/src/model.lua
+---@include ultrakill/src/animations.lua
 
 local CHIPPOS = chip():getPos()
 local astrosounds = require("sounds")
@@ -35,9 +36,14 @@ local STATES = {
 
 if SERVER then
     require("tweens")
+
     ---@class PlayerController
     ---@module 'controller'
     local PlayerController = require("ultrakill/src/controller.lua")
+
+    ---@class animations
+    ---@module 'animations'
+    local animations = require("ultrakill/src/animations.lua")
 
 
     local sounds = "https://raw.githubusercontent.com/AstricUnion/ULTRAKILL/refs/heads/main/sounds/"
@@ -76,6 +82,7 @@ if SERVER then
         local model = require("ultrakill/src/model.lua")
         model.Main:setPos(pos)
         model.Main:setParent(controller.body)
+        animations.defaultPose(model)
         local obj = setmetatable(
             {
                 controller = controller,
@@ -94,9 +101,9 @@ if SERVER then
         controller:addOnTick("movement", function(ctrl) obj:movement(ctrl) end)
 
         controller:addOnEnter("enter", function(_, ply)
-            net.start("StartV1")
+            --[[net.start("StartV1")
                 net.writeTable(obj.model)
-            net.send(ply)
+            net.send(ply)]]
         end)
 
         controller:addOnLeave("enter", function(_, ply)
@@ -143,6 +150,7 @@ if SERVER then
         ctrl:setVelocity(self.slideDirection * SLIDESPEED)
         ctrl:setCameraHeight(CAMERAHEIGHT.SLIDE)
         self.state = STATES.Slide
+        animations.slidePose(self.model)
         astrosounds.play("slide", Vector(), ctrl.body)
     end
 
@@ -155,6 +163,7 @@ if SERVER then
         end
         ctrl:setCameraHeight(CAMERAHEIGHT.DEFAULT)
         self.state = STATES.Idle
+        animations.defaultPose(self.model)
         astrosounds.stop("slide")
     end
 
@@ -163,21 +172,31 @@ if SERVER then
         local axis = ctrl:getControlAxis()
         if !axis then return end
         local rawAngs = ctrl.driver:getEyeAngles()
-        self.model.Head:setAngles(Angle(rawAngs.p / 4, rawAngs.y, 0))
+        self.model.Neck:setAngles(Angle(0, rawAngs.y, 0))
+        self.model.Head:setLocalAngles(Angle(rawAngs.p / 4, 0, 0))
         local angs = rawAngs:setP(0)
-        self.model.Main:setLocalAngles(math.lerpAngle(0.2, self.model.Main:getLocalAngles(), angs))
         local isOnGround = ctrl:isOnGround()
 
         if self.state == STATES.Idle then
+            ---@type Vector
             local axisRotated = axis:getRotated(angs)
             if !isOnGround then
                 ctrl:addVelocity(Vector(0, 0, -GRAVITY) + axisRotated * 12)
             else
-                if ctrl:getVelocity().z < -20 and self.state ~= STATES.Slam then
+                if ctrl:getVelocity().z < -50 and self.state ~= STATES.Slam then
                     astrosounds.play("land", Vector(), ctrl.body)
                 end
                 ctrl:setVelocity(axisRotated * SPEED)
+                if !axisRotated:isZero() and animations.currentAnimation ~= "movement" then
+                    animations.movement(self.model, function()
+                        local dir = ctrl:getControlAxis()
+                        return dir:setX(math.abs(dir.x)):getAngle()
+                    end)
+                elseif axisRotated:isZero() and animations.currentAnimation == "movement" then
+                    animations.defaultPose(self.model)
+                end
             end
+            self.model.Main:setLocalAngles(math.lerpAngle(0.2, self.model.Main:getLocalAngles(), angs))
 
         elseif self.state == STATES.Slide then
             local vel = ctrl:getVelocity()
@@ -189,6 +208,7 @@ if SERVER then
             local move = (-angs:getRight() * axis.y * SLIDEMOVESPEED)
             local gravity = Vector(0, 0, vel.z - GRAVITY)
             ctrl:setVelocity(slide + move + gravity)
+            self.model.Main:setLocalAngles(math.lerpAngle(0.2, self.model.Main:getLocalAngles(), self.slideDirection:getAngle()))
         end
     end
 

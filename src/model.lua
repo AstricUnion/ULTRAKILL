@@ -12,7 +12,7 @@ if SERVER then
 
     local function V1Part(partName, rigPos)
         return hologram.createPart(
-            Holo(Rig(rigPos or Vector(), Angle(), true)),
+            Holo(Rig(rigPos or Vector(), Angle())),
             Holo(SubHolo(Vector(), Angle(0, -90, 90), nil, Vector(47, 47, 47), nil, nil, nil, partName))
         )
     end
@@ -46,19 +46,21 @@ if SERVER then
     end
 
     local function Wings(prefix)
-        -- local mirrorMult = prefix == "Left" and 1 or -1
+        local mirrorMult = prefix == "Left" and 1 or -1
         local parts = {
-            V1Part("Wing" .. prefix .. "1", Vector()),
-            V1Part("Wing" .. prefix .. "2", Vector()),
-            V1Part("Wing" .. prefix .. "3", Vector()),
-            V1Part("Wing" .. prefix .. "4", Vector()),
+            V1Part("Wing" .. prefix .. "1", Vector(-5.6, mirrorMult * 3.5, 57)),
+            V1Part("Wing" .. prefix .. "2", Vector(-5.6, mirrorMult * 3.5, 58)),
+            V1Part("Wing" .. prefix .. "3", Vector(-5.6, mirrorMult * 3.5, 59)),
+            V1Part("Wing" .. prefix .. "4", Vector(-5.6, mirrorMult * 3.5, 60.7)),
         }
         return parts
     end
 
     local V1Model = {
         Main = Rig(Vector()),
-        Body = V1Part("Body", Vector(-1, 0, 43)),
+        Body = V1Part("Body", Vector(1, 0, 51)),
+        Pelvis = V1Part("Pelvis", Vector(-1, 0, 43)),
+        Neck = V1Part("Neck", Vector(2.5, 0, 62)),
         Head = V1Part("Head", Vector(-4, 0, 71)),
         LeftArm = Arm("Left"),
         RightArm = Arm("Right"),
@@ -68,12 +70,14 @@ if SERVER then
         RightWings = Wings("Right")
     }
 
-    V1Model.Head:setParent(V1Model.Body)
+    V1Model.Head:setParent(V1Model.Neck)
+    V1Model.Neck:setParent(V1Model.Body)
     V1Model.LeftArm.Leverage:setParent(V1Model.Body)
     V1Model.RightArm.Leverage:setParent(V1Model.Body)
-    V1Model.LeftLeg.Hip:setParent(V1Model.Body)
-    V1Model.RightLeg.Hip:setParent(V1Model.Body)
-    V1Model.Body:setParent(V1Model.Main)
+    V1Model.LeftLeg.Hip:setParent(V1Model.Pelvis)
+    V1Model.RightLeg.Hip:setParent(V1Model.Pelvis)
+    V1Model.Body:setParent(V1Model.Pelvis)
+    V1Model.Pelvis:setParent(V1Model.Main)
     for _, wing in ipairs(V1Model.LeftWings) do
         wing:setParent(V1Model.Body)
     end
