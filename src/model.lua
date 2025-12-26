@@ -13,7 +13,7 @@ if SERVER then
     local function V1Part(partName, rigPos)
         return hologram.createPart(
             Holo(Rig(rigPos or Vector(), Angle())),
-            Holo(SubHolo(Vector(), Angle(0, -90, 90), nil, Vector(47, 47, 47), nil, nil, nil, partName))
+            Holo(SubHolo(Vector(), Angle(0, -90, 0), "models/props_phx/construct/metal_tubex2.mdl", Vector(1, 1, 1), nil, nil, nil, partName))
         )
     end
 
@@ -98,7 +98,8 @@ else
     local wingTexture = material.create("VertexLitGeneric")
     wingTexture:setTextureURL("$basetexture", GITHUB_URL .. "textures/wing.png")
 
-    http.get(GITHUB_URL .. "models/v1.obj", function(obj)
+    -- http.get(GITHUB_URL .. "models/v1.obj", function(obj)
+        local obj = file.readInGame("data/starfall/ultrakill/models/v1.obj")
         if !obj then return end
         local loadmesh = coroutine.wrap(function()
             model = mesh.createFromObj(obj, true)
@@ -110,6 +111,7 @@ else
             while CHIP:getQuotaAverage() < CHIP:getQuotaMax() / 2 do
                 if loadmesh() then
                     for id, holo in pairs(createdHolos) do
+                        ---@cast holo Hologram
                         holo:setMesh(model[id])
                         local res, _, _ = string.find(id, "Wing")
                         holo:setMeshMaterial(res and wingTexture or mainTexture)
@@ -120,7 +122,7 @@ else
                 end
             end
         end)
-    end)
+    -- end)
 
 
     hook.add("HoloInitialized", "", function(id, holo)
