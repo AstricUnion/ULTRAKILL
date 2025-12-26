@@ -98,8 +98,7 @@ else
     local wingTexture = material.create("VertexLitGeneric")
     wingTexture:setTextureURL("$basetexture", GITHUB_URL .. "textures/wing.png")
 
-    -- http.get(GITHUB_URL .. "models/v1.obj", function(obj)
-        local obj = file.readInGame("data/starfall/ultrakill/models/v1.obj")
+    http.get(GITHUB_URL .. "models/v1.obj", function(obj)
         if !obj then return end
         local loadmesh = coroutine.wrap(function()
             model = mesh.createFromObj(obj, true)
@@ -122,7 +121,7 @@ else
                 end
             end
         end)
-    -- end)
+    end)
 
 
     hook.add("HoloInitialized", "", function(id, holo)
