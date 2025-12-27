@@ -5,6 +5,7 @@
 ---@include https://raw.githubusercontent.com/AstricUnion/Libs/refs/heads/main/sounds.lua as sounds
 ---@include ultrakill/src/controller.lua
 ---@include ultrakill/src/model.lua
+---@include ultrakill/src/weapons.lua
 
 local CHIPPOS = chip():getPos()
 local astrosounds = require("sounds")
@@ -62,6 +63,7 @@ if SERVER then
     ---@field state STATES
     ---@field dashRemain number
     ---@field movementVelocity Vector
+    ---@field slamHeight? number
     ---@field slideDirection? Vector
     ---@field dashDirection? Vector
     local V1 = {}
@@ -89,7 +91,7 @@ if SERVER then
                 state = STATES.Idle,
 
                 movementVelocity = Vector(),
-                lastVelocity = Vector(),
+                slamHeight = nil,
                 slideDirection = nil,
                 dashDirection = nil,
                 driver = nil
@@ -182,7 +184,7 @@ if SERVER then
             if !isOnGround then
                 ctrl:addVelocity(Vector(0, 0, -GRAVITY) + axisRotated * 12)
             else
-                if ctrl:getVelocity().z < -50 and self.state ~= STATES.Slam then
+                if ctrl:getVelocity().z < -80 and self.state ~= STATES.Slam then
                     astrosounds.play("land", Vector(), ctrl.body)
                 end
                 ctrl:setVelocity(axisRotated * SPEED)
@@ -200,7 +202,7 @@ if SERVER then
 
         elseif self.state == STATES.Slide then
             local vel = ctrl:getVelocity()
-            if vel:getLength() < 100 then
+            if vel:getLength() < 50 then
                 self:stopSlide(ctrl)
                 return
             end
@@ -225,7 +227,8 @@ if SERVER then
         -- Slam jump
         elseif self.state == STATES.Slam then
             self.state = STATES.Idle
-            ctrl:setVelocity(Vector(0, 0, JUMP * 2))
+            local slamHeight = self.slamHeight - ctrl.body:getPos().z
+            ctrl:setVelocity(Vector(0, 0, JUMP + slamHeight * 1.2))
 
         -- Just a jump
         else
@@ -240,6 +243,7 @@ if SERVER then
         if self.state == STATES.Slide or self.state == STATES.Slam then return end
         if ctrl:isOnGround() then return end
         self.state = STATES.Slam
+        self.slamHeight = ctrl.body:getPos().z
         timer.create("slam", 0, 0, function()
             ctrl:setVelocity(Vector(0, 0, -SLAMSPEED))
             if ctrl:isOnGround() then
@@ -248,9 +252,10 @@ if SERVER then
                 net.send(ctrl.driver)
                 astrosounds.play("land", Vector(), ctrl.body)
                 timer.remove("slam")
-                timer.simple(0.15, function()
+                timer.simple(0.2, function()
                     if self.state ~= STATES.Slam then return end
                     self.state = STATES.Idle
+                    self.slamHeight = nil
                 end)
             end
         end)
