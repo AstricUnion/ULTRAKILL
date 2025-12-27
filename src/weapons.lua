@@ -29,7 +29,7 @@ else
     local GITHUB_URL = "https://raw.githubusercontent.com/AstricUnion/ULTRAKILL/refs/heads/main/"
 
     local mainTexture = material.create("VertexLitGeneric")
-    mainTexture:setTextureURL("$basetexture", GITHUB_URL .. "textures/weapons/revolver_Diff_16.png")
+    mainTexture:setTextureURL("$basetexture", GITHUB_URL .. "textures/weapons/revolverDiff_9.png")
 
     local obj = file.readInGame("data/starfall/ultrakill/models/weapons.obj")
     if !obj then return end
