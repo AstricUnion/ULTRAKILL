@@ -156,9 +156,6 @@ if SERVER then
     function V1:stopSlide(ctrl)
         if self.state ~= STATES.Slide then return end
         self.slideDirection = nil
-        if ctrl:isOnGround() then
-            ctrl:setVelocity(Vector(0, 0, 0))
-        end
         ctrl:setCameraHeight(CAMERAHEIGHT.DEFAULT)
         self.state = STATES.Idle
         self.animations:play("idle")
@@ -251,7 +248,7 @@ if SERVER then
                 net.send(ctrl.driver)
                 astrosounds.play("land", Vector(), ctrl.body)
                 timer.remove("slam")
-                timer.simple(0.2, function()
+                timer.simple(0.15, function()
                     if self.state ~= STATES.Slam then return end
                     self.state = STATES.Idle
                 end)
