@@ -187,6 +187,16 @@ if SERVER then
         self.cameraHeight = resHeight
     end
 
+
+    ---Get eye trace
+    ---@return TraceResult?
+    function PlayerController:getEyeTrace()
+        if !isValid(self.driver) then return end
+        local pos = self.body:getPos() + Vector(0, 0, self.cameraHeight)
+        local ang = self.driver:getEyeAngles()
+        return trace.line(pos, pos + ang:getForward() * 16384, {self.body})
+    end
+
     ----- HOOKS -----
 
     ---Initialize hooks for controller

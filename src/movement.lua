@@ -5,7 +5,6 @@
 ---@include https://raw.githubusercontent.com/AstricUnion/Libs/refs/heads/main/sounds.lua as sounds
 ---@include ultrakill/src/controller.lua
 ---@include ultrakill/src/model.lua
----@include ultrakill/src/animations.lua
 
 local CHIPPOS = chip():getPos()
 local astrosounds = require("sounds")
@@ -41,11 +40,6 @@ if SERVER then
     ---@module 'controller'
     local PlayerController = require("ultrakill/src/controller.lua")
 
-    ---@class animations
-    ---@module 'animations'
-    local animations = require("ultrakill/src/animations.lua")
-
-
     local sounds = "https://raw.githubusercontent.com/AstricUnion/ULTRAKILL/refs/heads/main/sounds/"
     hook.add("ClientInitialized", "Sounds", function(ply)
         astrosounds.preload(
@@ -63,6 +57,7 @@ if SERVER then
     ---@class V1
     ---@field controller PlayerController
     ---@field model table<string, Hologram | table>
+    ---@field animations Animations
     ---@field seat Vehicle
     ---@field state STATES
     ---@field dashRemain number
@@ -78,15 +73,18 @@ if SERVER then
     function V1:new(pos, seat)
         local controller = PlayerController:new(pos, seat, CAMERAHEIGHT.DEFAULT, Vector(20, 20, 75))
         if !controller then return end
-        ---@module 'ultrakill.model'
-        local model = require("ultrakill/src/model.lua")
+        ---@module 'ultrakill.src.model'
+        local modelInfo = require("ultrakill/src/model.lua")
+        local model = modelInfo[1]
+        local animations = modelInfo[2]
         model.Main:setPos(pos)
         model.Main:setParent(controller.body)
-        animations.defaultPose(model)
+        animations:play("idle")
         local obj = setmetatable(
             {
                 controller = controller,
                 model = model,
+                animations = animations,
                 seat = seat,
                 state = STATES.Idle,
 
@@ -101,9 +99,9 @@ if SERVER then
         controller:addOnTick("movement", function(ctrl) obj:movement(ctrl) end)
 
         controller:addOnEnter("enter", function(_, ply)
-            --[[net.start("StartV1")
+            net.start("StartV1")
                 net.writeTable(obj.model)
-            net.send(ply)]]
+            net.send(ply)
         end)
 
         controller:addOnLeave("enter", function(_, ply)
@@ -150,7 +148,7 @@ if SERVER then
         ctrl:setVelocity(self.slideDirection * SLIDESPEED)
         ctrl:setCameraHeight(CAMERAHEIGHT.SLIDE)
         self.state = STATES.Slide
-        animations.slidePose(self.model)
+        self.animations:play("slide")
         astrosounds.play("slide", Vector(), ctrl.body)
     end
 
@@ -163,7 +161,7 @@ if SERVER then
         end
         ctrl:setCameraHeight(CAMERAHEIGHT.DEFAULT)
         self.state = STATES.Idle
-        animations.defaultPose(self.model)
+        self.animations:play("idle")
         astrosounds.stop("slide")
     end
 
@@ -176,6 +174,10 @@ if SERVER then
         self.model.Head:setLocalAngles(Angle(rawAngs.p / 4, 0, 0))
         local angs = rawAngs:setP(0)
         local isOnGround = ctrl:isOnGround()
+        local eyeTrace = ctrl:getEyeTrace()
+        if !eyeTrace then return end
+        local handAng = (eyeTrace.HitPos - self.model.RightArm.Leverage:getPos()):getAngle()
+        self.model.RightArm.Leverage:setAngles(handAng + Angle(-90, 0, 0))
 
         if self.state == STATES.Idle then
             ---@type Vector
@@ -187,13 +189,14 @@ if SERVER then
                     astrosounds.play("land", Vector(), ctrl.body)
                 end
                 ctrl:setVelocity(axisRotated * SPEED)
-                if !axisRotated:isZero() and animations.currentAnimation ~= "movement" then
-                    animations.movement(self.model, function()
+                if !axisRotated:isZero() and self.animations:get() ~= "movement" then
+                    self.animations:play("movement", {function()
                         local dir = ctrl:getControlAxis()
+                        if !dir then return Angle() end
                         return dir:setX(math.abs(dir.x)):getAngle()
-                    end)
-                elseif axisRotated:isZero() and animations.currentAnimation == "movement" then
-                    animations.defaultPose(self.model)
+                    end})
+                elseif axisRotated:isZero() and self.animations:get() == "movement" then
+                    self.animations:play("idle")
                 end
             end
             self.model.Main:setLocalAngles(math.lerpAngle(0.2, self.model.Main:getLocalAngles(), angs))
@@ -222,6 +225,11 @@ if SERVER then
             self.state = STATES.Idle
             ctrl:setVelocity(self.dashDirection * DASHJUMPSPEED + Vector(0, 0, JUMP))
 
+        -- Slam jump
+        elseif self.state == STATES.Slam then
+            self.state = STATES.Idle
+            ctrl:setVelocity(Vector(0, 0, JUMP * 2))
+
         -- Just a jump
         else
             ctrl:addVelocity(Vector(0, 0, JUMP))
@@ -241,9 +249,12 @@ if SERVER then
                 ctrl:setVelocity(Vector(0, 0, 0))
                 net.start("shake")
                 net.send(ctrl.driver)
-                self.state = STATES.Idle
                 astrosounds.play("land", Vector(), ctrl.body)
                 timer.remove("slam")
+                timer.simple(0.2, function()
+                    if self.state ~= STATES.Slam then return end
+                    self.state = STATES.Idle
+                end)
             end
         end)
     end

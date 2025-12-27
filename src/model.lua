@@ -2,6 +2,7 @@
 ---@author AstricUnion
 ---@shared
 ---@include astricunion/libs/holos.lua
+---@include ultrakill/src/animations.lua
 local holos = require("astricunion/libs/holos.lua")
 
 if SERVER then
@@ -13,7 +14,7 @@ if SERVER then
     local function V1Part(partName, rigPos)
         return hologram.createPart(
             Holo(Rig(rigPos or Vector(), Angle())),
-            Holo(SubHolo(Vector(), Angle(0, -90, 0), "models/props_phx/construct/metal_tubex2.mdl", Vector(1, 1, 1), nil, nil, nil, partName))
+            Holo(SubHolo(Vector(), Angle(0, -90, 0), "models/props_phx/construct/metal_tubex2.mdl", Vector(1, 1, 1), true, nil, nil, partName))
         )
     end
 
@@ -56,6 +57,8 @@ if SERVER then
         return parts
     end
 
+
+    ---@class V1Model
     local V1Model = {
         Main = Rig(Vector()),
         Body = V1Part("Body", Vector(1, 0, 51)),
@@ -85,7 +88,159 @@ if SERVER then
         wing:setParent(V1Model.Body)
     end
 
-    return V1Model
+    ---------- ANIMATIONS ----------
+    
+    ---@module 'ultrakill.src.animations'
+    ---@class Animations
+    local Animations = require("ultrakill/src/animations.lua")
+    local animations = Animations:new(V1Model)
+
+    ---Default, idle pose
+    animations:add("idle", function(_, model)
+        model.Pelvis:setLocalPos(Vector(-1, 0, 40))
+
+        model.RightLeg.Foot:setLocalAngles(Angle(-30, 0, 0))
+        model.RightLeg.Calf:setLocalAngles(Angle(50, 0, 0))
+        model.RightLeg.Hip:setLocalAngles(Angle(0, -10, -10))
+
+        model.LeftLeg.Foot:setLocalAngles(Angle(0, 0, 0))
+        model.LeftLeg.Calf:setLocalAngles(Angle(50, 0, 0))
+        model.LeftLeg.Hip:setLocalAngles(Angle(-50, 10, 0))
+
+        model.LeftArm.Palm:setLocalAngles(Angle(0, 0, 0))
+        model.LeftArm.Forearm:setLocalAngles(Angle(0, 0, 0))
+        model.LeftArm.Leverage:setLocalAngles(Angle(0, 0, 0))
+
+        model.Body:setLocalAngles(Angle(0, 0, 0))
+        model.Pelvis:setLocalAngles(Angle(0, 0, 0))
+
+        model.Neck:setLocalAngles(Angle(0, 0, 0))
+        model.Head:setLocalAngles(Angle(0, 0, 0))
+
+        model.LeftWings[1]:setLocalAngles(Angle(0, 0, 0))
+        model.LeftWings[2]:setLocalAngles(Angle(0, 0, 0))
+        model.LeftWings[3]:setLocalAngles(Angle(0, 0, 0))
+        model.LeftWings[4]:setLocalAngles(Angle(0, 0, 0))
+
+        model.RightWings[1]:setLocalAngles(Angle(0, 0, 0))
+        model.RightWings[2]:setLocalAngles(Angle(0, 0, 0))
+        model.RightWings[3]:setLocalAngles(Angle(0, 0, 0))
+        model.RightWings[4]:setLocalAngles(Angle(0, 0, 0))
+
+        local tw = Tween:new()
+        tw:add(
+            Param:new(0.5, model.LeftLeg.Hip, PROPERTY.LOCALANGLES, Angle(-40, 10, 0), math.easeOutSine),
+            Param:new(0.5, model.LeftLeg.Calf, PROPERTY.LOCALANGLES, Angle(40, 0, 0), math.easeOutSine),
+            Param:new(0.5, model.RightLeg.Calf, PROPERTY.LOCALANGLES, Angle(40, 0, 0), math.easeOutSine),
+            Param:new(0.5, model.Pelvis, PROPERTY.LOCALPOS, Vector(-1, 0, 41), math.easeOutSine)
+        )
+        tw:add(
+            Param:new(0.5, model.LeftLeg.Hip, PROPERTY.LOCALANGLES, Angle(-50, 10, 0), math.easeOutSine),
+            Param:new(0.5, model.LeftLeg.Calf, PROPERTY.LOCALANGLES, Angle(50, 0, 0), math.easeOutSine),
+            Param:new(0.5, model.RightLeg.Calf, PROPERTY.LOCALANGLES, Angle(50, 0, 0), math.easeOutSine),
+            Param:new(0.5, model.Pelvis, PROPERTY.LOCALPOS, Vector(-1, 0, 39), math.easeOutSine)
+        )
+        tw:setLoop(true)
+        tw:start()
+        return tw
+    end)
+
+
+    ---Movement, when V1 moves
+    animations:add("movement", function(_, model, payload)
+        model.Pelvis:setLocalPos(Vector(-1, 0, 41))
+
+        model.RightLeg.Foot:setLocalAngles(Angle(-20, 0, 0))
+        model.RightLeg.Calf:setLocalAngles(Angle(20, 0, 0))
+        model.RightLeg.Hip:setLocalAngles(Angle(0, 0, 0))
+
+        model.LeftLeg.Foot:setLocalAngles(Angle(0, 0, 0))
+        model.LeftLeg.Calf:setLocalAngles(Angle(20, 0, 0))
+        model.LeftLeg.Hip:setLocalAngles(Angle(-20, 0, 0))
+
+        model.LeftArm.Palm:setLocalAngles(Angle(0, 0, 0))
+        model.LeftArm.Forearm:setLocalAngles(Angle(0, 0, 0))
+        model.LeftArm.Leverage:setLocalAngles(Angle(0, 0, 0))
+
+        model.Body:setLocalAngles(Angle(0, 0, 0))
+        model.Pelvis:setLocalAngles(Angle(0, 0, 0))
+
+        model.Neck:setLocalAngles(Angle(0, 0, 0))
+        model.Head:setLocalAngles(Angle(0, 0, 0))
+
+        model.LeftWings[1]:setLocalAngles(Angle(0, 0, 0))
+        model.LeftWings[2]:setLocalAngles(Angle(0, 0, 0))
+        model.LeftWings[3]:setLocalAngles(Angle(0, 0, 0))
+        model.LeftWings[4]:setLocalAngles(Angle(0, 0, 0))
+
+        model.RightWings[1]:setLocalAngles(Angle(0, 0, 0))
+        model.RightWings[2]:setLocalAngles(Angle(0, 0, 0))
+        model.RightWings[3]:setLocalAngles(Angle(0, 0, 0))
+        model.RightWings[4]:setLocalAngles(Angle(0, 0, 0))
+
+        local getMovementDirection = payload[1]
+        local tw = Tween:new()
+        local bodyAngle = function()
+            return -getMovementDirection()
+        end
+
+        tw:add(
+            Param:new(0.2, model.LeftLeg.Hip, PROPERTY.LOCALANGLES, Angle(-80, 0, 0), math.easeOutSine),
+            Param:new(0.2, model.LeftLeg.Calf, PROPERTY.LOCALANGLES, Angle(80, 0, 0), math.easeOutSine),
+
+            Param:new(0.1, model.RightLeg.Hip, PROPERTY.LOCALANGLES, Angle(40, 0, 0), math.easeOutSine),
+            Param:new(0.1, model.RightLeg.Calf, PROPERTY.LOCALANGLES, Angle(0, 0, 0), math.easeOutSine),
+
+            Param:new(0.2, model.Pelvis, PROPERTY.LOCALANGLES, getMovementDirection, math.easeOutSine),
+            Param:new(0.2, model.Body, PROPERTY.LOCALANGLES, bodyAngle, math.easeOutSine)
+        )
+        tw:add(
+            Param:new(0.1, model.LeftLeg.Hip, PROPERTY.LOCALANGLES, Angle(40, 0, 0), math.easeOutSine),
+            Param:new(0.1, model.LeftLeg.Calf, PROPERTY.LOCALANGLES, Angle(0, 0, 0), math.easeOutSine),
+
+            Param:new(0.2, model.RightLeg.Hip, PROPERTY.LOCALANGLES, Angle(-80, 0, 0), math.easeOutSine),
+            Param:new(0.2, model.RightLeg.Calf, PROPERTY.LOCALANGLES, Angle(80, 0, 0), math.easeOutSine)
+        )
+        tw:setLoop(true)
+        tw:start()
+        return tw
+    end)
+
+
+    ---Slide pose
+    animations:add("slide", function(_, model)
+        model.Pelvis:setLocalPos(Vector(0, 0, 2))
+
+        model.RightLeg.Foot:setLocalAngles(Angle(0, 0, 0))
+        model.RightLeg.Calf:setLocalAngles(Angle(0, 0, 0))
+        model.RightLeg.Hip:setLocalAngles(Angle(-50, 0, 0))
+
+        model.LeftLeg.Foot:setLocalAngles(Angle(45, 0, 0))
+        model.LeftLeg.Calf:setLocalAngles(Angle(120, 0, 0))
+        model.LeftLeg.Hip:setLocalAngles(Angle(-135, 0, 90))
+
+        model.LeftArm.Palm:setLocalAngles(Angle(10, -90, 10))
+        model.LeftArm.Forearm:setLocalAngles(Angle(-135, 0, 180))
+        model.LeftArm.Leverage:setLocalAngles(Angle(60, -90, 0))
+
+        model.Body:setLocalAngles(Angle(-8, 75, 11))
+        model.Pelvis:setLocalAngles(Angle(-45, 0, 0))
+
+        model.Neck:setLocalAngles(Angle(30, -50, 0))
+        model.Head:setLocalAngles(Angle(0, -30, 0))
+
+        model.LeftWings[1]:setLocalAngles(Angle(0, 30, 60))
+        model.LeftWings[2]:setLocalAngles(Angle(0, 20, 60))
+        model.LeftWings[3]:setLocalAngles(Angle(0, 10, 60))
+        model.LeftWings[4]:setLocalAngles(Angle(0, 0, 60))
+
+        model.RightWings[1]:setLocalAngles(Angle(0, -30, 20))
+        model.RightWings[2]:setLocalAngles(Angle(0, -20, 20))
+        model.RightWings[3]:setLocalAngles(Angle(0, -10, 20))
+        model.RightWings[4]:setLocalAngles(Angle(0, 0, 20))
+    end)
+
+    return { V1Model, animations }
 else
     ---Holos to apply model. Index is name, value is holo
     local createdHolos = {}
