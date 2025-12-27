@@ -13,14 +13,14 @@ if SERVER then
     local function V1Part(partName, rigPos)
         return hologram.createPart(
             Holo(Rig(rigPos or Vector(), Angle())),
-            Holo(SubHolo(Vector(), Angle(0, -90, 0), "models/props_phx/construct/metal_tubex2.mdl", Vector(50, 50, 50), true, nil, nil, partName))
+            Holo(SubHolo(Vector(), Angle(0, -90, 0), "models/props_phx/construct/metal_tubex2.mdl", Vector(1, 1, 1), true, nil, nil, partName))
         )
     end
 
     ---@class V1Weapons
     local V1Weapons = {
         Main = Rig(Vector()),
-        Revolver = V1Part("plane001.smd", Vector()),
+        Revolver = V1Part("Revolver", Vector()),
     }
 else
     ---Holos to apply model. Index is name, value is holo
@@ -29,10 +29,7 @@ else
     local GITHUB_URL = "https://raw.githubusercontent.com/AstricUnion/ULTRAKILL/refs/heads/main/"
 
     local mainTexture = material.create("VertexLitGeneric")
-    mainTexture:setTextureURL("$basetexture", GITHUB_URL .. "textures/main.png")
-
-    local wingTexture = material.create("VertexLitGeneric")
-    wingTexture:setTextureURL("$basetexture", GITHUB_URL .. "textures/wing.png")
+    mainTexture:setTextureURL("$basetexture", GITHUB_URL .. "textures/weapons/revolver_Diff_16.png")
 
     local obj = file.readInGame("data/starfall/ultrakill/models/weapons.obj")
     if !obj then return end
