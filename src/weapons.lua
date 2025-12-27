@@ -31,29 +31,30 @@ else
     local mainTexture = material.create("VertexLitGeneric")
     mainTexture:setTextureURL("$basetexture", GITHUB_URL .. "textures/weapons/revolverDiff_9.png")
 
-    local obj = file.readInGame("data/starfall/ultrakill/models/weapons.obj")
-    if !obj then return end
-    local loadmesh = coroutine.wrap(function()
-        model = mesh.createFromObj(obj, true)
-        printTable(model)
-        return true
-    end)
+    http.get(GITHUB_URL .. "models/weapons.obj", function(obj)
+        if !obj then return end
+        local loadmesh = coroutine.wrap(function()
+            model = mesh.createFromObj(obj, true)
+            printTable(model)
+            return true
+        end)
 
-    local CHIP = chip()
-    hook.add("Think", "LoadModel",function()
-        while CHIP:getQuotaAverage() < CHIP:getQuotaMax() / 2 do
-            if loadmesh() then
-                for id, holo in pairs(createdHolos) do
-                    ---@cast holo Hologram
-                    holo:setMesh(model[id])
-                    local res, _, _ = string.find(id, "Wing")
-                    holo:setMeshMaterial(res and wingTexture or mainTexture)
+        local CHIP = chip()
+        hook.add("Think", "LoadModel",function()
+            while CHIP:getQuotaAverage() < CHIP:getQuotaMax() / 2 do
+                if loadmesh() then
+                    for id, holo in pairs(createdHolos) do
+                        ---@cast holo Hologram
+                        holo:setMesh(model[id])
+                        local res, _, _ = string.find(id, "Wing")
+                        holo:setMeshMaterial(res and wingTexture or mainTexture)
+                    end
+                    createdHolos = {}
+                    hook.remove("Think","LoadModel")
+                    return
                 end
-                createdHolos = {}
-                hook.remove("Think","LoadModel")
-                return
             end
-        end
+        end)
     end)
 
 
