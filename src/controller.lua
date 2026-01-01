@@ -6,27 +6,33 @@
 -- TODO: Bring this to hologram
 
 
-local GRAVITY = 980
-
 if SERVER then
-    ---Cube-formed hitbox. Modified from hitbox lib: https://raw.githubusercontent.com/AstricUnion/Libs/refs/heads/main/hitbox.lua
+
+    ---Cylinder-formed hitbox
     ---@param pos Vector Position of hitbox
     ---@param angle Angle Angle of hitbox
     ---@param size Vector Size of hitbox
     ---@param freeze boolean? Make hitbox freezed, default false
     ---@return Entity hitbox Hitbox entity
     local function createHitbox(pos, angle, size, freeze)
-        local actualSize = size / 2
-        local pr = prop.createCustom(pos, angle,
-            {{
-                Vector(-actualSize.x, -actualSize.y, 0), Vector(actualSize.x, -actualSize.y, 0),
-                Vector(actualSize.x, actualSize.y, 0), Vector(-actualSize.x, actualSize.y, 0),
-                Vector(-actualSize.x, -actualSize.y, size.z), Vector(actualSize.x, -actualSize.y, size.z),
-                Vector(actualSize.x, actualSize.y, size.z), Vector(-actualSize.x, actualSize.y, size.z),
-            }},
+        local vertices = {}
+        local polygons = 16
+        for i=1,polygons do
+            local ang = math.rad((360 / polygons) * i)
+            local x = math.cos(ang) * size.x / 2
+            local y = math.sin(ang) * size.y / 2
+            table.insert(vertices, Vector(x, y, size.z))
+            table.insert(vertices, Vector(x, y, 0))
+        end
+        local pr = prop.createCustom(
+            pos,
+            angle,
+            {
+                vertices
+            },
             freeze
         )
-        pr:setNoDraw(true)
+        pr:setColor(Color(255, 255, 255, 0))
         return pr
     end
 
@@ -62,6 +68,8 @@ if SERVER then
         physobj:setDamping(0, 5000)
         physobj:enableGravity(false)
         physobj:setMaterial("Player")
+        physobj:addGameFlags(1024) -- no impact damage
+        body:setCollisionGroup(COLLISION_GROUP.PLAYER)
         local camera = hologram.create(pos + Vector(0, 0, cameraHeight), Angle(), "models/editor/camera.mdl")
         if !camera then return end
         camera:setNoDraw(true)
@@ -102,7 +110,7 @@ if SERVER then
         local pos = self.body:getPos()
         local res = trace.hull(
             pos,
-            pos - Vector(0, 0, 8),
+            pos - Vector(0, 0, 5),
             self.box[1] - Vector(),
             Vector(self.box[2].x, self.box[2].y, 0),
             {self.body},
@@ -285,6 +293,8 @@ if SERVER then
     end
 
     --[[ Very easy controller example
+    local GRAVITY = 980
+
     local CHIPPOS = chip():getPos()
     local seat = prop.createSeat(CHIPPOS, Angle(), "models/nova/chair_plastic01.mdl", true)
     local controller = PlayerController:new(CHIPPOS + Vector(50, 0, 0), seat, 80, Vector(24, 24, 80))
@@ -317,13 +327,14 @@ else
     net.receive("PlayerControllerCamera", function()
         net.readEntity(function(ent)
             cameraHeight = net.readInt(16)
-            hook.add("CalcView", "", function()
+            hook.add("CalcView", "", function(_, _, fov)
                 local pos = ent:getPos() + Vector(0, 0, cameraHeight)
                 local ang = PLAYER:getEyeAngles()
-                local origin, angles = hook.run("PlayerControllerCalcView", pos, ang)
+                local origin, angles, hookFov = hook.run("PlayerControllerCalcView", pos, ang)
                 return {
                     origin = origin or pos,
                     angles = angles or ang,
+                    fov = hookFov or fov
                 }
             end)
             hook.run("PlayerControllerActivate", ent)

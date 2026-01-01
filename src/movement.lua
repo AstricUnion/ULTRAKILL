@@ -11,7 +11,7 @@ local CHIPPOS = chip():getPos()
 local astrosounds = require("sounds")
 
 -- Constants --
-local GRAVITY = 20
+local GRAVITY = 980
 local SPEED = 500
 local SLIDESPEED = 800
 local SLIDEMOVESPEED = 100
@@ -19,7 +19,8 @@ local DASHSPEED = 30000
 local DASHDURATION = 0.1
 local DASHJUMPSPEED = 800
 local SLAMSPEED = 2000
-local JUMP = 500
+local CLINGSPEED = 1960
+local JUMP = 700
 local CAMERAHEIGHT = {
     DEFAULT = 70,
     SLIDE = 30
@@ -31,7 +32,9 @@ local STATES = {
     Slam = 1,
     Dash = 2,
     DashJump = 3,
-    Slide = 4
+    Slide = 4,
+    Cling = 5,
+    WallJump = 6
 }
 
 if SERVER then
@@ -49,7 +52,8 @@ if SERVER then
             Sound:new("dash", 1, false, sounds .. "Dash.mp3"),
             Sound:new("land", 1, false, sounds .. "Landing.mp3"),
             Sound:new("landHeavy", 1, false, sounds .. "LandingHeavy.mp3"),
-            Sound:new("slide", 1, true, sounds .. "Slide.mp3")
+            Sound:new("slide", 1, true, sounds .. "Slide.mp3"),
+            Sound:new("ricochet", 1, false, sounds .. "Ricochet.mp3")
         )
     end)
 
@@ -58,6 +62,7 @@ if SERVER then
     ---@class V1
     ---@field controller PlayerController
     ---@field model table<string, Hologram | table>
+    ---@field weapons table<string, Hologram | table>
     ---@field animations Animations
     ---@field seat Vehicle
     ---@field state STATES
@@ -75,6 +80,7 @@ if SERVER then
     function V1:new(pos, seat)
         local controller = PlayerController:new(pos, seat, CAMERAHEIGHT.DEFAULT, Vector(20, 20, 75))
         if !controller then return end
+        controller.body:setHealth(100)
         ---@module 'ultrakill.src.model'
         local modelInfo = require("ultrakill/src/model.lua")
         local model = modelInfo[1]
@@ -82,10 +88,16 @@ if SERVER then
         model.Main:setPos(pos)
         model.Main:setParent(controller.body)
         animations:play("idle")
+        ---@module 'ultrakill.src.weapons'
+        local weapons = require("ultrakill/src/weapons.lua")
+        weapons.Revolver[1]:setPos(model.RightArm.Palm:getPos() + Vector(1, 0, -2))
+        weapons.Revolver[1]:setAngles(Angle(80, 0, 0))
+        weapons.Revolver[1]:setParent(model.RightArm.Palm)
         local obj = setmetatable(
             {
                 controller = controller,
                 model = model,
+                weapons = weapons,
                 animations = animations,
                 seat = seat,
                 state = STATES.Idle,
@@ -94,6 +106,9 @@ if SERVER then
                 slamHeight = nil,
                 slideDirection = nil,
                 dashDirection = nil,
+                dashRemain = 3.0,
+                walljumpRemain = 3,
+                slamjumpRemain = 3,
                 driver = nil
             },
             V1
@@ -162,6 +177,7 @@ if SERVER then
         self.state = STATES.Idle
         self.animations:play("idle")
         astrosounds.stop("slide")
+        astrosounds.play("ricochet", Vector(), ctrl.body)
     end
 
 
@@ -169,8 +185,8 @@ if SERVER then
         local axis = ctrl:getControlAxis()
         if !axis then return end
         local rawAngs = ctrl.driver:getEyeAngles()
-        self.model.Neck:setAngles(Angle(0, rawAngs.y, 0))
-        self.model.Head:setLocalAngles(Angle(rawAngs.p / 4, 0, 0))
+        self.model.Neck:setAngles(Angle(rawAngs.p / 6 - 10, rawAngs.y, 0))
+        self.model.Head:setLocalAngles(Angle(rawAngs.p / 2 - 10, 0, 0))
         local angs = rawAngs:setP(0)
         local isOnGround = ctrl:isOnGround()
         local eyeTrace = ctrl:getEyeTrace()
@@ -178,16 +194,28 @@ if SERVER then
         local handAng = (eyeTrace.HitPos - self.model.RightArm.Leverage:getPos()):getAngle()
         self.model.RightArm.Leverage:setAngles(handAng + Angle(-90, 0, 0))
 
-        if self.state == STATES.Idle then
-            ---@type Vector
+        local delta = game.getTickInterval()
+        if self.state == STATES.Idle or self.state == STATES.Cling or self.state == STATES.WallJump then
+            self.dashRemain = math.min(self.dashRemain + delta, 3)
             local axisRotated = axis:getRotated(angs)
+            local velocity = ctrl:getVelocity()
             if !isOnGround then
-                ctrl:addVelocity(Vector(0, 0, -GRAVITY) + axisRotated * 12)
+                local pos = ctrl.body:getPos()
+                local res = trace.line(pos, pos + axisRotated * ctrl.size.x, {ctrl.body})
+                if !res.Hit or self.state == STATES.WallJump then
+                    self.state = STATES.Idle
+                    ctrl:addVelocity(Vector(0, 0, -GRAVITY * delta) + axisRotated * 20)
+                else
+                    self.state = STATES.Cling
+                    ctrl:setVelocity(Vector(0, 0, math.max(velocity.z - GRAVITY * delta, -CLINGSPEED * delta)))
+                end
             else
-                if ctrl:getVelocity().z < -80 and self.state ~= STATES.Slam then
+                self.walljumpRemain = 3
+                if velocity.z < -80 and self.state ~= STATES.Slam then
                     astrosounds.play("land", Vector(), ctrl.body)
                 end
-                ctrl:setVelocity(axisRotated * SPEED)
+                self.movementVelocity = math.lerpVector(0.5, self.movementVelocity, axisRotated * SPEED)
+                ctrl:setVelocity(self.movementVelocity)
                 if !axisRotated:isZero() and self.animations:get() ~= "movement" then
                     self.animations:play("movement", {function()
                         local dir = ctrl:getControlAxis()
@@ -198,17 +226,26 @@ if SERVER then
                     self.animations:play("idle")
                 end
             end
-            self.model.Main:setLocalAngles(math.lerpAngle(0.2, self.model.Main:getLocalAngles(), angs))
+            local newAngs = math.lerpAngle(0.2, self.model.Main:getLocalAngles(), angs)
+            self.model.Main:setLocalAngles(newAngs)
+            local velo = velocity:getRotated(newAngs:setY(-newAngs.y))
+            local ang = Angle(0, velo.x / 20, velo.z / -50)
+            for i, wing in ipairs(self.model.LeftWings) do
+                wing:setLocalAngles(ang / i)
+            end
+            for i, wing in ipairs(self.model.RightWings) do
+                wing:setLocalAngles(ang / -i)
+            end
 
         elseif self.state == STATES.Slide then
             local vel = ctrl:getVelocity()
-            if vel:getLength() < 50 then
+            if vel:getLength() < 200 then
                 self:stopSlide(ctrl)
                 return
             end
             local slide = self.slideDirection * SLIDESPEED
             local move = (-angs:getRight() * axis.y * SLIDEMOVESPEED)
-            local gravity = Vector(0, 0, vel.z - GRAVITY)
+            local gravity = Vector(0, 0, vel.z - GRAVITY * delta)
             ctrl:setVelocity(slide + move + gravity)
             self.model.Main:setLocalAngles(math.lerpAngle(0.2, self.model.Main:getLocalAngles(), self.slideDirection:getAngle()))
         end
@@ -216,19 +253,34 @@ if SERVER then
 
 
     function V1:jump(ctrl)
-        if !ctrl:isOnGround() then return end
+        if self.state ~= STATES.Cling and !ctrl:isOnGround() then return end
         self:stopSlide(ctrl)
 
         -- Dash jump
-        if self.state == STATES.Dash then
+        if self.state == STATES.Dash and self.dashRemain > 1 then
             self.state = STATES.Idle
             ctrl:setVelocity(self.dashDirection * DASHJUMPSPEED + Vector(0, 0, JUMP))
+            self.dashRemain = self.dashRemain - 1
 
         -- Slam jump
         elseif self.state == STATES.Slam then
             self.state = STATES.Idle
-            local slamHeight = self.slamHeight - ctrl.body:getPos().z
+            local slamHeight
+            if self.slamjumpRemain == 0 then
+                slamHeight = 0
+            else
+                slamHeight = self.slamHeight - ctrl.body:getPos().z
+            end
             ctrl:setVelocity(Vector(0, 0, JUMP + slamHeight * 1.2))
+            self.slamjumpRemain = self.slamjumpRemain - 1
+
+        -- Wall jump
+        elseif self.state == STATES.Cling then
+            if self.walljumpRemain == 0 then return end
+            self.walljumpRemain = self.walljumpRemain - 1
+            local axis = ctrl:getControlAxis():getRotated(ctrl.driver:getEyeAngles():setP(0))
+            self.state = STATES.WallJump
+            ctrl:setVelocity(Vector(-axis.x * JUMP / 2, -axis.y * JUMP / 2, JUMP))
 
         -- Just a jump
         else
@@ -256,6 +308,7 @@ if SERVER then
                     if self.state ~= STATES.Slam then return end
                     self.state = STATES.Idle
                     self.slamHeight = nil
+                    self.slamjumpRemain = 3
                 end)
             end
         end)
@@ -263,7 +316,7 @@ if SERVER then
 
 
     function V1:dash(ctrl)
-        if self.state == STATES.Dash then return end
+        if self.state == STATES.Dash or self.dashRemain < 1 then return end
         self.dashDirection = self:getControlDirection()
         if !self.dashDirection then return end
         self:stopSlide(ctrl)
@@ -283,6 +336,7 @@ if SERVER then
             )
         )
         tw:start()
+        self.dashRemain = self.dashRemain - 1
         self.state = STATES.Dash
     end
 
@@ -292,6 +346,7 @@ if SERVER then
 else
     require("ultrakill/src/controller.lua")
     require("ultrakill/src/model.lua")
+    require("ultrakill/src/weapons.lua")
     local PLAYER = player()
     local model
     local shakeOffset = Vector()
@@ -313,7 +368,7 @@ else
             end
             local children = holo:getChildren()
             for _, child in ipairs(children) do
-                if child:getModel() == "models/hunter/plates/plate.mdl" then continue end
+                if child:getModel() == "models/editor/axis_helper_thick.mdl" then continue end
                 child:setNoDraw(nodraw)
             end
         end
@@ -332,7 +387,7 @@ else
     hook.add("PlayerControllerCalcView", "V1", function(origin, angles)
         local slope = (PLAYER:keyDown(IN_KEY.MOVELEFT) and 1 or 0) - (PLAYER:keyDown(IN_KEY.MOVERIGHT) and 1 or 0)
         local angs = Angle(0, 0, slope * -1)
-        return origin + shakeOffset, angles + angs
+        return origin + shakeOffset, angles + angs, 120
     end)
 
     net.receive("shake", function()

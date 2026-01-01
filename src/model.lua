@@ -3,6 +3,7 @@
 ---@shared
 ---@include astricunion/libs/holos.lua
 ---@include ultrakill/src/animations.lua
+---@include ultrakill/src/mesh.lua
 local holos = require("astricunion/libs/holos.lua")
 
 if SERVER then
@@ -180,31 +181,73 @@ if SERVER then
 
         local getMovementDirection = payload[1]
         local tw = Tween:new()
-        local bodyAngle = function()
-            return -getMovementDirection()
+        local hipAngle = function(angle)
+            return function()
+                 return angle:setY(getMovementDirection().y)
+            end
         end
 
         tw:add(
-            Param:new(0.2, model.LeftLeg.Hip, PROPERTY.LOCALANGLES, Angle(-80, 0, 0), math.easeOutSine),
-            Param:new(0.2, model.LeftLeg.Calf, PROPERTY.LOCALANGLES, Angle(80, 0, 0), math.easeOutSine),
+            Param:new(0.1, model.LeftLeg.Hip, PROPERTY.LOCALANGLES, hipAngle(Angle(-80, 0, 0)), math.easeOutSine),
+            Param:new(0.1, model.LeftLeg.Calf, PROPERTY.LOCALANGLES, Angle(80, 0, 0), math.easeOutSine),
 
-            Param:new(0.1, model.RightLeg.Hip, PROPERTY.LOCALANGLES, Angle(40, 0, 0), math.easeOutSine),
+            Param:new(0.1, model.RightLeg.Hip, PROPERTY.LOCALANGLES, hipAngle(Angle(40, 0, 0)), math.easeOutSine),
             Param:new(0.1, model.RightLeg.Calf, PROPERTY.LOCALANGLES, Angle(0, 0, 0), math.easeOutSine),
+            Param:new({0.1, 0.2}, model.RightLeg.Calf, PROPERTY.LOCALANGLES, Angle(30, 0, 0), math.easeOutSine),
 
-            Param:new(0.2, model.Pelvis, PROPERTY.LOCALANGLES, getMovementDirection, math.easeOutSine),
-            Param:new(0.2, model.Body, PROPERTY.LOCALANGLES, bodyAngle, math.easeOutSine)
+            Param:new(0.1, model.Pelvis, PROPERTY.LOCALPOS, Vector(-1, 0, 41), math.easeOutSine)
         )
         tw:add(
-            Param:new(0.1, model.LeftLeg.Hip, PROPERTY.LOCALANGLES, Angle(40, 0, 0), math.easeOutSine),
+            Param:new(0.1, model.LeftLeg.Hip, PROPERTY.LOCALANGLES, hipAngle(Angle(40, 0, 0)), math.easeOutSine),
             Param:new(0.1, model.LeftLeg.Calf, PROPERTY.LOCALANGLES, Angle(0, 0, 0), math.easeOutSine),
+            Param:new({0.1, 0.2}, model.LeftLeg.Calf, PROPERTY.LOCALANGLES, Angle(30, 0, 0), math.easeOutSine),
 
-            Param:new(0.2, model.RightLeg.Hip, PROPERTY.LOCALANGLES, Angle(-80, 0, 0), math.easeOutSine),
-            Param:new(0.2, model.RightLeg.Calf, PROPERTY.LOCALANGLES, Angle(80, 0, 0), math.easeOutSine)
+            Param:new(0.1, model.RightLeg.Hip, PROPERTY.LOCALANGLES, hipAngle(Angle(-80, 0, 0)), math.easeOutSine),
+            Param:new(0.1, model.RightLeg.Calf, PROPERTY.LOCALANGLES, Angle(80, 0, 0), math.easeOutSine),
+
+            Param:new(0.1, model.Pelvis, PROPERTY.LOCALPOS, Vector(-1, 0, 39), math.easeOutSine)
         )
         tw:setLoop(true)
         tw:start()
         return tw
     end)
+
+
+    ---In air
+    animations:add("inAir", function(_, model, payload)
+        model.Pelvis:setLocalPos(Vector(-1, 0, 41))
+
+        model.RightLeg.Foot:setLocalAngles(Angle(-20, 0, 0))
+        model.RightLeg.Calf:setLocalAngles(Angle(20, 0, 0))
+        model.RightLeg.Hip:setLocalAngles(Angle(0, 0, 0))
+
+        model.LeftLeg.Foot:setLocalAngles(Angle(0, 0, 0))
+        model.LeftLeg.Calf:setLocalAngles(Angle(20, 0, 0))
+        model.LeftLeg.Hip:setLocalAngles(Angle(-20, 0, 0))
+
+        model.LeftArm.Palm:setLocalAngles(Angle(0, 0, 0))
+        model.LeftArm.Forearm:setLocalAngles(Angle(0, 0, 0))
+        model.LeftArm.Leverage:setLocalAngles(Angle(0, 0, 0))
+
+        model.Body:setLocalAngles(Angle(0, 0, 0))
+        model.Pelvis:setLocalAngles(Angle(0, 0, 0))
+
+        model.Neck:setLocalAngles(Angle(0, 0, 0))
+        model.Head:setLocalAngles(Angle(0, 0, 0))
+
+        model.LeftWings[1]:setLocalAngles(Angle(0, 0, 0))
+        model.LeftWings[2]:setLocalAngles(Angle(0, 0, 0))
+        model.LeftWings[3]:setLocalAngles(Angle(0, 0, 0))
+        model.LeftWings[4]:setLocalAngles(Angle(0, 0, 0))
+
+        model.RightWings[1]:setLocalAngles(Angle(0, 0, 0))
+        model.RightWings[2]:setLocalAngles(Angle(0, 0, 0))
+        model.RightWings[3]:setLocalAngles(Angle(0, 0, 0))
+        model.RightWings[4]:setLocalAngles(Angle(0, 0, 0))
+    end)
+
+    animations:play("inAir")
+
 
 
     ---Slide pose
@@ -242,9 +285,11 @@ if SERVER then
 
     return { V1Model, animations }
 else
+    ---@class CustomMesh
+    local CustomMesh = require("ultrakill/src/mesh.lua")
+
     ---Holos to apply model. Index is name, value is holo
     local createdHolos = {}
-    local model
     local GITHUB_URL = "https://raw.githubusercontent.com/AstricUnion/ULTRAKILL/refs/heads/main/"
 
     local mainTexture = material.create("VertexLitGeneric")
@@ -253,39 +298,29 @@ else
     local wingTexture = material.create("VertexLitGeneric")
     wingTexture:setTextureURL("$basetexture", GITHUB_URL .. "textures/wing.png")
 
-    http.get(GITHUB_URL .. "models/v1.obj", function(obj)
-        if !obj then return end
-        local loadmesh = coroutine.wrap(function()
-            model = mesh.createFromObj(obj, true)
-            return true
-        end)
-
-        local CHIP = chip()
-        hook.add("Think", "LoadModel",function()
-            while CHIP:getQuotaAverage() < CHIP:getQuotaMax() / 2 do
-                if loadmesh() then
-                    for id, holo in pairs(createdHolos) do
-                        ---@cast holo Hologram
-                        holo:setMesh(model[id])
-                        local res, _, _ = string.find(id, "Wing")
-                        holo:setMeshMaterial(res and wingTexture or mainTexture)
-                    end
-                    createdHolos = {}
-                    hook.remove("Think","LoadModel")
-                    return
-                end
+    local mesh = CustomMesh:new(GITHUB_URL .. "models/v1.obj")
+        :setDefaultMaterial(mainTexture)
+        :addMaterial("WingRight1", wingTexture)
+        :addMaterial("WingRight2", wingTexture)
+        :addMaterial("WingRight3", wingTexture)
+        :addMaterial("WingRight4", wingTexture)
+        :addMaterial("WingLeft1", wingTexture)
+        :addMaterial("WingLeft2", wingTexture)
+        :addMaterial("WingLeft3", wingTexture)
+        :addMaterial("WingLeft4", wingTexture)
+        :init(function(self)
+            for id, holo in pairs(createdHolos) do
+                self:setTo(id, holo)
             end
+            createdHolos = {}
         end)
-    end)
 
 
-    hook.add("HoloInitialized", "", function(id, holo)
-        if !model then
+    hook.add("HoloInitialized", "Model", function(id, holo)
+        if !mesh:isInitialized() then
             createdHolos[id] = holo
         else
-            holo:setMesh(model[id])
-            local res, _, _ = string.find(id, "Wing")
-            holo:setMeshMaterial(res and wingTexture or mainTexture)
+            mesh:setTo(id, holo)
         end
     end)
 end

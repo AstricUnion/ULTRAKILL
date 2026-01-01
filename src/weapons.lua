@@ -1,7 +1,8 @@
----@name V1 weapons
+---@name Weapons
 ---@author AstricUnion
 ---@shared
 ---@include astricunion/libs/holos.lua
+---@include ultrakill/src/mesh.lua
 local holos = require("astricunion/libs/holos.lua")
 
 if SERVER then
@@ -10,71 +11,52 @@ if SERVER then
     local Rig = holos.Rig
     local SubHolo = holos.SubHolo
 
-    local function V1Part(partName, rigPos)
+    local function WeaponPart(partName, rigPos)
         return hologram.createPart(
             Holo(Rig(rigPos or Vector(), Angle())),
-            Holo(SubHolo(Vector(), Angle(0, -90, 0), "models/props_phx/construct/metal_tubex2.mdl", Vector(1, 1, 1), true, nil, nil, partName))
+            Holo(SubHolo(Vector(), Angle(0, 90, 90), "models/Combine_Helicopter/helicopter_bomb01.mdl", Vector(1, 1, 1), true, nil, nil, partName))
         )
     end
 
     ---@class V1Weapons
     local V1Weapons = {
         Main = Rig(Vector()),
-        Revolver = {V1Part("Revolver", Vector()), V1Part("RevolverCylinder", Vector())}
+        Revolver = {
+            WeaponPart("Revolver", Vector(-3, 0, -2)),
+            WeaponPart("RevolverCylinder", Vector(0, 0, 1.65))
+        }
     }
+
+    V1Weapons.Revolver[2]:setParent(V1Weapons.Revolver[1])
+
+    return V1Weapons
 else
+    ---@class CustomMesh
+    local CustomMesh = require("ultrakill/src/mesh.lua")
+
     ---Holos to apply model. Index is name, value is holo
     local createdHolos = {}
-    local model
     local GITHUB_URL = "https://raw.githubusercontent.com/AstricUnion/ULTRAKILL/refs/heads/main/"
 
-    local urlTexture = material.create("VertexLitGeneric")
-    urlTexture:setTextureURL("$basetexture", GITHUB_URL .. "textures/weapons/revolverDiff_9.png")
-    render.createRenderTarget("texture")
-    local mainTexture = material.create("VertexLitGeneric")
-    mainTexture:setTextureRenderTarget("$basetexture", "texture")
+    local revolverTexture = material.create("VertexLitGeneric")
+    revolverTexture:setTextureURL("$basetexture", GITHUB_URL .. "textures/weapons/revolverDiff_9.png")
 
-    hook.add("RenderOffscreen", "", function()
-        render.selectRenderTarget("texture")
-        do
-            render.setMaterial(urlTexture)
-            render.drawTexturedRect(0, 1024, 1024, -1024)
-        end
-        render.selectRenderTarget()
-    end)
-
-    http.get(GITHUB_URL .. "models/weapons.obj", function(obj)
-        if !obj then return end
-        local loadmesh = coroutine.wrap(function()
-            model = mesh.createFromObj(obj, true)
-            return true
-        end)
-
-        local CHIP = chip()
-        hook.add("Think", "LoadWeaponsModel",function()
-            while CHIP:getQuotaAverage() < CHIP:getQuotaMax() / 2 do
-                if loadmesh() then
-                    for id, holo in pairs(createdHolos) do
-                        ---@cast holo Hologram
-                        holo:setMesh(model[id])
-                        holo:setMeshMaterial(mainTexture)
-                    end
-                    createdHolos = {}
-                    hook.remove("Think","LoadModel")
-                    return
-                end
+    local mesh = CustomMesh:new(GITHUB_URL .. "models/weapons.obj")
+        :addMaterial("Revolver", revolverTexture)
+        :addMaterial("RevolverCylinder", revolverTexture)
+        :init(function(self)
+            for id, holo in pairs(createdHolos) do
+                self:setTo(id, holo)
             end
+            createdHolos = {}
         end)
-    end)
 
 
-    hook.add("HoloInitialized", "", function(id, holo)
-        if !model then
+    hook.add("HoloInitialized", "Weapons", function(id, holo)
+        if !mesh:isInitialized() then
             createdHolos[id] = holo
         else
-            holo:setMesh(model[id])
-            local res, _, _ = string.find(id, "Wing")
-            holo:setMeshMaterial(mainTexture)
+            mesh:setTo(id, holo)
         end
     end)
 end
