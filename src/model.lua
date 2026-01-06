@@ -2,39 +2,42 @@
 ---@author AstricUnion
 ---@shared
 ---@include astricunion/libs/holos.lua
----@include ultrakill/src/animations.lua
----@include ultrakill/src/mesh.lua
+---@include ultrakill/libs/animations.lua
+---@include ultrakill/libs/mesh.lua
+
 local holos = require("astricunion/libs/holos.lua")
 
+---@class Holo
+local Holo = holos.Holo
+local Rig = holos.Rig
+local SubHolo = holos.SubHolo
+
+local function V1Part(partName, rigPos)
+    return hologram.createPart(
+        Holo(Rig(rigPos or Vector(), Angle())),
+        Holo(SubHolo(Vector(), Angle(0, -90, 0), "models/props_phx/construct/metal_tubex2.mdl", Vector(1, 1, 1), true, nil, nil, partName))
+    )
+end
+
+
+local function Arm(prefix)
+    local mirrorMult = prefix == "Left" and 1 or -1
+    local parts = {
+        Leverage = V1Part(prefix .. "Leverage", Vector(-1, 8 * mirrorMult, 61)),
+        Forearm = V1Part(prefix .. "Forearm", Vector(-0.2, 9.2 * mirrorMult, 50.2)),
+        Palm = V1Part(prefix .. "Palm", Vector(2.5, 9 * mirrorMult, 37)),
+        Fingers = V1Part(prefix .. "Fingers", Vector(3.1, 10 * mirrorMult, 34)),
+        Thumb = V1Part(prefix .. "Thumb", Vector(5, 10 * mirrorMult, 36)),
+    }
+    parts.Forearm:setParent(parts.Leverage)
+    parts.Palm:setParent(parts.Forearm)
+    parts.Fingers:setParent(parts.Palm)
+    parts.Thumb:setParent(parts.Palm)
+    return parts
+end
+
+
 if SERVER then
-    ---@class Holo
-    local Holo = holos.Holo
-    local Rig = holos.Rig
-    local SubHolo = holos.SubHolo
-
-    local function V1Part(partName, rigPos)
-        return hologram.createPart(
-            Holo(Rig(rigPos or Vector(), Angle())),
-            Holo(SubHolo(Vector(), Angle(0, -90, 0), "models/props_phx/construct/metal_tubex2.mdl", Vector(1, 1, 1), true, nil, nil, partName))
-        )
-    end
-
-    local function Arm(prefix)
-        local mirrorMult = prefix == "Left" and 1 or -1
-        local parts = {
-            Leverage = V1Part(prefix .. "Leverage", Vector(-1, 8 * mirrorMult, 61)),
-            Forearm = V1Part(prefix .. "Forearm", Vector(-0.2, 9.2 * mirrorMult, 50.2)),
-            Palm = V1Part(prefix .. "Palm", Vector(2.5, 9 * mirrorMult, 37)),
-            Fingers = V1Part(prefix .. "Fingers", Vector(3.1, 10 * mirrorMult, 34)),
-            Thumb = V1Part(prefix .. "Thumb", Vector(5, 10 * mirrorMult, 36)),
-        }
-        parts.Forearm:setParent(parts.Leverage)
-        parts.Palm:setParent(parts.Forearm)
-        parts.Fingers:setParent(parts.Palm)
-        parts.Thumb:setParent(parts.Palm)
-        return parts
-    end
-
     local function Leg(prefix)
         local mirrorMult = prefix == "Left" and 1 or -1
         local parts = {
@@ -93,7 +96,7 @@ if SERVER then
     
     ---@module 'ultrakill.src.animations'
     ---@class Animations
-    local Animations = require("ultrakill/src/animations.lua")
+    local Animations = require("ultrakill/libs/animations.lua")
     local animations = Animations:new(V1Model)
 
     ---Default, idle pose
@@ -286,7 +289,9 @@ if SERVER then
     return { V1Model, animations }
 else
     ---@class CustomMesh
-    local CustomMesh = require("ultrakill/src/mesh.lua")
+    local CustomMesh = require("ultrakill/libs/mesh.lua")
+
+    local Feedbacker = Arm("Left")
 
     ---Holos to apply model. Index is name, value is holo
     local createdHolos = {}
@@ -323,4 +328,6 @@ else
             mesh:setTo(id, holo)
         end
     end)
+
+    return Feedbacker
 end

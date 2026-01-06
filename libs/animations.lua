@@ -1,6 +1,5 @@
 ---@name V1 animations
 ---@author AstricUnion
----@include ultrakill/src/model.lua
 ---@include https://raw.githubusercontent.com/AstricUnion/Libs/refs/heads/main/tweens.lua as tweens
 ---@module 'astricunion.libs.tweens'
 require("tweens")

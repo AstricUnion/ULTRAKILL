@@ -2,7 +2,7 @@
 ---@author AstricUnion
 ---@shared
 ---@include astricunion/libs/holos.lua
----@include ultrakill/src/mesh.lua
+---@include ultrakill/libs/mesh.lua
 local holos = require("astricunion/libs/holos.lua")
 
 if SERVER then
@@ -32,7 +32,7 @@ if SERVER then
     return V1Weapons
 else
     ---@class CustomMesh
-    local CustomMesh = require("ultrakill/src/mesh.lua")
+    local CustomMesh = require("ultrakill/libs/mesh.lua")
 
     ---Holos to apply model. Index is name, value is holo
     local createdHolos = {}

@@ -1,13 +1,12 @@
----@name ULTRAKILL
+---@name V1 Movement
 ---@author AstricUnion
 ---@shared
 ---@include https://raw.githubusercontent.com/AstricUnion/Libs/refs/heads/main/tweens.lua as tweens
 ---@include https://raw.githubusercontent.com/AstricUnion/Libs/refs/heads/main/sounds.lua as sounds
----@include ultrakill/src/controller.lua
+---@include ultrakill/libs/controller.lua
 ---@include ultrakill/src/model.lua
 ---@include ultrakill/src/weapons.lua
 
-local CHIPPOS = chip():getPos()
 local astrosounds = require("sounds")
 
 -- Constants --
@@ -42,7 +41,7 @@ if SERVER then
 
     ---@class PlayerController
     ---@module 'controller'
-    local PlayerController = require("ultrakill/src/controller.lua")
+    local PlayerController = require("ultrakill/libs/controller.lua")
 
     local sounds = "https://raw.githubusercontent.com/AstricUnion/ULTRAKILL/refs/heads/main/sounds/"
     hook.add("ClientInitialized", "Sounds", function(ply)
@@ -340,13 +339,12 @@ if SERVER then
         self.state = STATES.Dash
     end
 
-
-    local seat = prop.createSeat(CHIPPOS, Angle(), "models/nova/chair_plastic01.mdl", true)
-    local v1 = V1:new(CHIPPOS + Vector(50, 0, 0), seat)
+    return V1
 else
-    require("ultrakill/src/controller.lua")
-    require("ultrakill/src/model.lua")
+    require("ultrakill/libs/controller.lua")
     require("ultrakill/src/weapons.lua")
+    local Feedbacker = require("ultrakill/src/model.lua")
+
     local PLAYER = player()
     local model
     local shakeOffset = Vector()
@@ -354,7 +352,7 @@ else
     local hudMat = material.create("VertexLitGeneric")
     hudMat:setInt("$flags", 256)
     hudMat:setTextureRenderTarget("$basetexture", "HUD")
-    local hudHolo = hologram.create(CHIPPOS, Angle(), "models/holograms/plane.mdl", Vector(0.3, 0.3, 0.3))
+    local hudHolo = hologram.create(Vector(), Angle(), "models/holograms/plane.mdl", Vector(0.3, 0.3, 0.3))
     if !hudHolo then return end
     hudHolo:suppressEngineLighting(true)
     hudHolo:setSubMaterial(0, "!" .. hudMat:getName())
@@ -373,6 +371,8 @@ else
             end
         end
     end
+
+    noDrawModel(Feedbacker, true)
 
     net.receive("StartV1", function()
         model = net.readTable()
