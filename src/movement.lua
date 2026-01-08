@@ -343,7 +343,7 @@ if SERVER then
 else
     require("ultrakill/libs/controller.lua")
     require("ultrakill/src/weapons.lua")
-    local Feedbacker = require("ultrakill/src/model.lua")
+    require("ultrakill/src/model.lua")
 
     local PLAYER = player()
     local model
@@ -371,8 +371,6 @@ else
             end
         end
     end
-
-    noDrawModel(Feedbacker, true)
 
     net.receive("StartV1", function()
         model = net.readTable()
