@@ -27,9 +27,7 @@ if SERVER then
         local pr = prop.createCustom(
             pos,
             angle,
-            {
-                vertices
-            },
+            {vertices},
             freeze
         )
         pr:setColor(Color(255, 255, 255, 0))

@@ -6,6 +6,7 @@
 ---@include ultrakill/libs/controller.lua
 ---@include ultrakill/src/model.lua
 ---@include ultrakill/src/weapons.lua
+---@include ultrakill/src/hud.lua
 
 local astrosounds = require("sounds")
 
@@ -82,6 +83,7 @@ if SERVER then
         controller.body:setHealth(100)
         ---@module 'ultrakill.src.model'
         local modelInfo = require("ultrakill/src/model.lua")
+        ---@class V1Model
         local model = modelInfo[1]
         local animations = modelInfo[2]
         model.Main:setPos(pos)
@@ -92,6 +94,7 @@ if SERVER then
         weapons.Revolver[1]:setPos(model.RightArm.Palm:getPos() + Vector(1, 0, -2))
         weapons.Revolver[1]:setAngles(Angle(80, 0, 0))
         weapons.Revolver[1]:setParent(model.RightArm.Palm)
+        model.Weapons = weapons
         local obj = setmetatable(
             {
                 controller = controller,
@@ -141,6 +144,7 @@ if SERVER then
                 obj:stopSlide(ctrl)
             end
         )
+        controller:addBind(IN_KEY.ALT1, function(ctrl) print("jdlks") end)
 
         return obj
     end
@@ -182,18 +186,25 @@ if SERVER then
 
     function V1:movement(ctrl)
         local axis = ctrl:getControlAxis()
-        if !axis then return end
+        local isOnGround = ctrl:isOnGround()
+        local delta = game.getTickInterval()
+        if !axis then
+            if !isOnGround then
+                ctrl:addVelocity(Vector(0, 0, -GRAVITY * delta))
+            else
+                ctrl:setVelocity(Vector())
+            end
+            return
+        end
         local rawAngs = ctrl.driver:getEyeAngles()
         self.model.Neck:setAngles(Angle(rawAngs.p / 6 - 10, rawAngs.y, 0))
         self.model.Head:setLocalAngles(Angle(rawAngs.p / 2 - 10, 0, 0))
         local angs = rawAngs:setP(0)
-        local isOnGround = ctrl:isOnGround()
         local eyeTrace = ctrl:getEyeTrace()
         if !eyeTrace then return end
         local handAng = (eyeTrace.HitPos - self.model.RightArm.Leverage:getPos()):getAngle()
         self.model.RightArm.Leverage:setAngles(handAng + Angle(-90, 0, 0))
 
-        local delta = game.getTickInterval()
         if self.state == STATES.Idle or self.state == STATES.Cling or self.state == STATES.WallJump then
             self.dashRemain = math.min(self.dashRemain + delta, 3)
             local axisRotated = axis:getRotated(angs)
@@ -342,21 +353,20 @@ if SERVER then
     return V1
 else
     require("ultrakill/libs/controller.lua")
-    require("ultrakill/src/weapons.lua")
+    local viewmodelRig, _ = require("ultrakill/src/weapons.lua")
     require("ultrakill/src/model.lua")
+    ---@class V1HUD
+    local V1HUD = require("ultrakill/src/hud.lua")
 
     local PLAYER = player()
     local model
     local shakeOffset = Vector()
-    render.createRenderTarget("HUD")
-    local hudMat = material.create("VertexLitGeneric")
-    hudMat:setInt("$flags", 256)
-    hudMat:setTextureRenderTarget("$basetexture", "HUD")
-    local hudHolo = hologram.create(Vector(), Angle(), "models/holograms/plane.mdl", Vector(0.3, 0.3, 0.3))
-    if !hudHolo then return end
-    hudHolo:suppressEngineLighting(true)
-    hudHolo:setSubMaterial(0, "!" .. hudMat:getName())
-    hudHolo:setColor(Color():setA(200))
+
+    local hud = V1HUD:new()
+    if !hud then return end
+    hook.add("RenderOffscreen", "", function()
+        hud:RenderOffscreen()
+    end)
 
     local function noDrawModel(modelTable, nodraw)
         for _, holo in pairs(modelTable) do
@@ -385,6 +395,9 @@ else
     hook.add("PlayerControllerCalcView", "V1", function(origin, angles)
         local slope = (PLAYER:keyDown(IN_KEY.MOVELEFT) and 1 or 0) - (PLAYER:keyDown(IN_KEY.MOVERIGHT) and 1 or 0)
         local angs = Angle(0, 0, slope * -1)
+        viewmodelRig:setPos(origin + angles:getForward() * 15 + angles:getRight() * 5 + angles:getUp() * -5)
+        viewmodelRig:setAngles(angles)
+        hud:CalcView(origin, angles)
         return origin + shakeOffset, angles + angs, 120
     end)
 

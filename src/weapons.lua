@@ -5,12 +5,12 @@
 ---@include ultrakill/libs/mesh.lua
 local holos = require("astricunion/libs/holos.lua")
 
-if SERVER then
-    ---@class Holo
-    local Holo = holos.Holo
-    local Rig = holos.Rig
-    local SubHolo = holos.SubHolo
+---@class Holo
+local Holo = holos.Holo
+local Rig = holos.Rig
+local SubHolo = holos.SubHolo
 
+if SERVER then
     local function WeaponPart(partName, rigPos)
         return hologram.createPart(
             Holo(Rig(rigPos or Vector(), Angle())),
@@ -36,6 +36,10 @@ else
 
     ---Holos to apply model. Index is name, value is holo
     local createdHolos = {}
+    ---@type Hologram
+    local viewmodelRig = Rig()
+    local viewmodel = SubHolo(nil, Angle(0, 90, 90), "models/Combine_Helicopter/helicopter_bomb01.mdl", nil, true, nil, nil)
+    viewmodel:setParent(viewmodelRig)
     local GITHUB_URL = "https://raw.githubusercontent.com/AstricUnion/ULTRAKILL/refs/heads/main/"
 
     local revolverTexture = material.create("VertexLitGeneric")
@@ -48,6 +52,7 @@ else
             for id, holo in pairs(createdHolos) do
                 self:setTo(id, holo)
             end
+            self:setTo("Revolver", viewmodel)
             createdHolos = {}
         end)
 
@@ -59,4 +64,6 @@ else
             mesh:setTo(id, holo)
         end
     end)
+
+    return viewmodelRig, viewmodel
 end

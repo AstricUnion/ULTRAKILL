@@ -1,7 +1,6 @@
 ---@name V1 HUD
 ---@author AstricUnion
 ---@client
----@owneronly
 
 
 ---@class V1HUD
@@ -67,17 +66,9 @@ end
 
 
 function V1HUD:CalcView(origin, angles)
-    self.background:setPos(origin + angles:getForward() * 10 + angles:getRight() * -7 + angles:getUp() * -10)
+    self.background:setPos(origin + angles:getForward() * 8 + angles:getRight() * -7 + angles:getUp() * -10)
     self.background:setAngles(angles + Angle(-90, 0, 20))
 end
 
 
-enableHud(nil, true)
-local hud = V1HUD:new()
-if !hud then return end
-hook.add("CalcView", "", function(origin, angles)
-    hud:CalcView(origin, angles)
-end)
-hook.add("RenderOffscreen", "", function()
-    hud:RenderOffscreen()
-end)
+return V1HUD
