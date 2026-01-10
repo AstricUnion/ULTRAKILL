@@ -1,4 +1,4 @@
----@name V1
+---@name V1 model
 ---@author AstricUnion
 ---@shared
 ---@include astricunion/libs/holos.lua
@@ -250,8 +250,6 @@ if SERVER then
         model.RightWings[4]:setLocalAngles(Angle(0, 0, 0))
     end)
 
-    animations:play("inAir")
-
 
 
     ---Slide pose
@@ -293,7 +291,6 @@ else
     local CustomMesh = require("ultrakill/libs/mesh.lua")
 
     ---Holos to apply model. Index is name, value is holo
-    local createdHolos = {}
     local GITHUB_URL = "https://raw.githubusercontent.com/AstricUnion/ULTRAKILL/refs/heads/main/"
 
     local mainTexture = material.create("VertexLitGeneric")
@@ -304,27 +301,16 @@ else
 
     local mesh = CustomMesh:new(GITHUB_URL .. "models/v1.obj")
         :setDefaultMaterial(mainTexture)
-        :addMaterial("WingRight1", wingTexture)
-        :addMaterial("WingRight2", wingTexture)
-        :addMaterial("WingRight3", wingTexture)
-        :addMaterial("WingRight4", wingTexture)
-        :addMaterial("WingLeft1", wingTexture)
-        :addMaterial("WingLeft2", wingTexture)
-        :addMaterial("WingLeft3", wingTexture)
-        :addMaterial("WingLeft4", wingTexture)
-        :init(function(self)
-            for id, holo in pairs(createdHolos) do
-                self:setTo(id, holo)
-            end
-            createdHolos = {}
-        end)
-
+        :addMaterial(
+            {
+                "WingRight1", "WingRight2", "WingRight3", "WingRight4",
+                "WingLeft1", "WingLeft2", "WingLeft3", "WingLeft4",
+            },
+            wingTexture
+        ):init()
 
     hook.add("HoloInitialized", "Model", function(id, holo)
-        if !mesh:isInitialized() then
-            createdHolos[id] = holo
-        else
-            mesh:setTo(id, holo)
-        end
+        if id == "Revolver" then return end
+        mesh:setTo(id, holo)
     end)
 end

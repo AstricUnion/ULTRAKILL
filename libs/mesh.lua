@@ -10,6 +10,7 @@ local CHIP = chip()
 ---@field defaultMaterial Material?
 ---@field materials table<string, Material>
 ---@field mesh table<string, Mesh>?
+---@field holosToSet table<string, Hologram>
 local CustomMesh = {}
 CustomMesh.__index = CustomMesh
 
@@ -22,7 +23,8 @@ function CustomMesh:new(url)
             url = url,
             defaultMaterial = nil,
             materials = {},
-            mesh = nil
+            mesh = nil,
+            holosToSet = {}
         },
         CustomMesh
     )
@@ -30,11 +32,13 @@ end
 
 
 ---Add new material to part
----@param name string
----@param material Material
+---@param names table Name of parts
+---@param material Material Material to set
 ---@return CustomMesh
-function CustomMesh:addMaterial(name, material)
-    self.materials[name] = material
+function CustomMesh:addMaterial(names, material)
+    for _, name in ipairs(names) do
+        self.materials[name] = material
+    end
     return self
 end
 
@@ -63,6 +67,9 @@ function CustomMesh:init(callback)
             while CHIP:getQuotaAverage() < CHIP:getQuotaMax() / 2 do
                 if loadmesh() then
                     if callback then callback(self) end
+                    for name, holo in pairs(self.holosToSet) do
+                        self:setTo(name, holo)
+                    end
                     hook.remove("Think", id)
                     return
                 end
@@ -78,7 +85,7 @@ end
 ---@param holo Hologram
 function CustomMesh:setTo(name, holo)
     if !self:isInitialized() then
-        throw("Mesh not initialized, you can't set it to hologram")
+        self.holosToSet[name] = holo
         return
     end
     if !self.mesh[name] then

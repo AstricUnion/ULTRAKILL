@@ -2,18 +2,18 @@
 ---@author AstricUnion
 ---@shared
 ---@include https://raw.githubusercontent.com/AstricUnion/Libs/refs/heads/main/tweens.lua as tweens
----@include https://raw.githubusercontent.com/AstricUnion/Libs/refs/heads/main/sounds.lua as sounds
+---@include astricunion/libs/sounds.lua
 ---@include ultrakill/libs/controller.lua
 ---@include ultrakill/src/model.lua
----@include ultrakill/src/weapons.lua
 ---@include ultrakill/src/hud.lua
 
-local astrosounds = require("sounds")
+local astrosounds = require("astricunion/libs/sounds.lua")
 
 -- Constants --
 local GRAVITY = 980
-local SPEED = 500
-local SLIDESPEED = 800
+local SPEED = 30000
+local AIRSPEED = 500
+local SLIDESPEED = 50000
 local SLIDEMOVESPEED = 100
 local DASHSPEED = 30000
 local DASHDURATION = 0.1
@@ -44,25 +44,10 @@ if SERVER then
     ---@module 'controller'
     local PlayerController = require("ultrakill/libs/controller.lua")
 
-    local sounds = "https://raw.githubusercontent.com/AstricUnion/ULTRAKILL/refs/heads/main/sounds/"
-    hook.add("ClientInitialized", "Sounds", function(ply)
-        astrosounds.preload(
-            ply,
-            Sound:new("jump", 1, false, sounds .. "Jump.mp3"),
-            Sound:new("dash", 1, false, sounds .. "Dash.mp3"),
-            Sound:new("land", 1, false, sounds .. "Landing.mp3"),
-            Sound:new("landHeavy", 1, false, sounds .. "LandingHeavy.mp3"),
-            Sound:new("slide", 1, true, sounds .. "Slide.mp3"),
-            Sound:new("ricochet", 1, false, sounds .. "Ricochet.mp3")
-        )
-    end)
-
-
     ---Mankind is dead. Blood is fuel. Hell is full.
     ---@class V1
     ---@field controller PlayerController
     ---@field model table<string, Hologram | table>
-    ---@field weapons table<string, Hologram | table>
     ---@field animations Animations
     ---@field seat Vehicle
     ---@field state STATES
@@ -89,17 +74,10 @@ if SERVER then
         model.Main:setPos(pos)
         model.Main:setParent(controller.body)
         animations:play("idle")
-        ---@module 'ultrakill.src.weapons'
-        local weapons = require("ultrakill/src/weapons.lua")
-        weapons.Revolver[1]:setPos(model.RightArm.Palm:getPos() + Vector(1, 0, -2))
-        weapons.Revolver[1]:setAngles(Angle(80, 0, 0))
-        weapons.Revolver[1]:setParent(model.RightArm.Palm)
-        model.Weapons = weapons
         local obj = setmetatable(
             {
                 controller = controller,
                 model = model,
-                weapons = weapons,
                 animations = animations,
                 seat = seat,
                 state = STATES.Idle,
@@ -115,7 +93,7 @@ if SERVER then
             },
             V1
         )
-        controller:addOnTick("movement", function(ctrl) obj:movement(ctrl) end)
+        controller:addOnTick("movement", function(ctrl, delta) obj:movement(ctrl, delta) end)
 
         controller:addOnEnter("enter", function(_, ply)
             net.start("StartV1")
@@ -144,7 +122,7 @@ if SERVER then
                 obj:stopSlide(ctrl)
             end
         )
-        controller:addBind(IN_KEY.ALT1, function(ctrl) print("jdlks") end)
+        controller:addBind(IN_KEY.BULLRUSH, function(ctrl) print("jdlks") end)
 
         return obj
     end
@@ -184,10 +162,9 @@ if SERVER then
     end
 
 
-    function V1:movement(ctrl)
+    function V1:movement(ctrl, delta)
         local axis = ctrl:getControlAxis()
         local isOnGround = ctrl:isOnGround()
-        local delta = game.getTickInterval()
         if !axis then
             if !isOnGround then
                 ctrl:addVelocity(Vector(0, 0, -GRAVITY * delta))
@@ -214,7 +191,7 @@ if SERVER then
                 local res = trace.line(pos, pos + axisRotated * ctrl.size.x, {ctrl.body})
                 if !res.Hit or self.state == STATES.WallJump then
                     self.state = STATES.Idle
-                    ctrl:addVelocity(Vector(0, 0, -GRAVITY * delta) + axisRotated * 20)
+                    ctrl:addVelocity(Vector(0, 0, -GRAVITY * delta) + axisRotated * AIRSPEED * delta)
                 else
                     self.state = STATES.Cling
                     ctrl:setVelocity(Vector(0, 0, math.max(velocity.z - GRAVITY * delta, -CLINGSPEED * delta)))
@@ -224,7 +201,7 @@ if SERVER then
                 if velocity.z < -80 and self.state ~= STATES.Slam then
                     astrosounds.play("land", Vector(), ctrl.body)
                 end
-                self.movementVelocity = math.lerpVector(0.5, self.movementVelocity, axisRotated * SPEED)
+                self.movementVelocity = math.lerpVector(0.5, self.movementVelocity, axisRotated * SPEED * delta)
                 ctrl:setVelocity(self.movementVelocity)
                 if !axisRotated:isZero() and self.animations:get() ~= "movement" then
                     self.animations:play("movement", {function()
@@ -253,8 +230,8 @@ if SERVER then
                 self:stopSlide(ctrl)
                 return
             end
-            local slide = self.slideDirection * SLIDESPEED
-            local move = (-angs:getRight() * axis.y * SLIDEMOVESPEED)
+            local slide = self.slideDirection * SLIDESPEED * delta
+            local move = (-angs:getRight() * axis.y * SLIDEMOVESPEED * delta)
             local gravity = Vector(0, 0, vel.z - GRAVITY * delta)
             ctrl:setVelocity(slide + move + gravity)
             self.model.Main:setLocalAngles(math.lerpAngle(0.2, self.model.Main:getLocalAngles(), self.slideDirection:getAngle()))
@@ -353,8 +330,16 @@ if SERVER then
     return V1
 else
     require("ultrakill/libs/controller.lua")
-    local viewmodelRig, _ = require("ultrakill/src/weapons.lua")
     require("ultrakill/src/model.lua")
+
+    local sounds = "https://raw.githubusercontent.com/AstricUnion/ULTRAKILL/refs/heads/main/sounds/"
+    astrosounds.preload("jump", 1, false, false, sounds .. "Jump.mp3")
+    astrosounds.preload("dash", 1, false, false, sounds .. "Dash.mp3")
+    astrosounds.preload("land", 1, false, false, sounds .. "Landing.mp3")
+    astrosounds.preload("landHeavy", 1, false, false, sounds .. "LandingHeavy.mp")
+    astrosounds.preload("slide", 1, true, false, sounds .. "Slide.mp3")
+    astrosounds.preload("ricochet", 1, false, false, sounds .. "Ricochet.mp3")
+
     ---@class V1HUD
     local V1HUD = require("ultrakill/src/hud.lua")
 
@@ -395,8 +380,6 @@ else
     hook.add("PlayerControllerCalcView", "V1", function(origin, angles)
         local slope = (PLAYER:keyDown(IN_KEY.MOVELEFT) and 1 or 0) - (PLAYER:keyDown(IN_KEY.MOVERIGHT) and 1 or 0)
         local angs = Angle(0, 0, slope * -1)
-        viewmodelRig:setPos(origin + angles:getForward() * 15 + angles:getRight() * 5 + angles:getUp() * -5)
-        viewmodelRig:setAngles(angles)
         hud:CalcView(origin, angles)
         return origin + shakeOffset, angles + angs, 120
     end)

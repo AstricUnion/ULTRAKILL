@@ -106,10 +106,11 @@ if SERVER then
     ---@return boolean
     function PlayerController:isOnGroundTrace()
         local pos = self.body:getPos()
+        local velo = self.body:getVelocity()
         local res = trace.hull(
             pos,
-            pos - Vector(0, 0, 5),
-            self.box[1] - Vector(),
+            pos + Vector(0, 0, (math.min(velo.z, 0) / 73) - 5),
+            self.box[1],
             Vector(self.box[2].x, self.box[2].y, 0),
             {self.body},
             MASK.PLAYERSOLID,
@@ -159,7 +160,7 @@ if SERVER then
     
     ---Add callback to tick hook
     ---@param identifier string
-    ---@param func fun(self: PlayerController)
+    ---@param func fun(self: PlayerController, delta: number)
     function PlayerController:addOnTick(identifier, func)
         self.onTick[identifier] = func
     end
@@ -239,9 +240,10 @@ if SERVER then
     function PlayerController:Tick()
         self.physobj:setAngleVelocity(Vector())
         self.physobj:setAngles(Angle())
+        local delta = game.getTickInterval()
         self:isOnGroundTrace()
         for _, func in pairs(self.onTick) do
-            func(self)
+            func(self, delta)
         end
     end
 
@@ -290,33 +292,6 @@ if SERVER then
         if func then func(self) end
     end
 
-    --[[ Very easy controller example
-    local GRAVITY = 980
-
-    local CHIPPOS = chip():getPos()
-    local seat = prop.createSeat(CHIPPOS, Angle(), "models/nova/chair_plastic01.mdl", true)
-    local controller = PlayerController:new(CHIPPOS + Vector(50, 0, 0), seat, 80, Vector(24, 24, 80))
-    if !controller then return end
-
-    controller:addOnTick("move", function(ctrl)
-        if !ctrl.driver then return end
-        if !ctrl:isOnGround() then
-            ctrl:addVelocity(Vector(0, 0, -GRAVITY * game.getTickInterval()))
-        else
-            local speed = Vector()
-            local axis = ctrl:getControlAxis()
-            if axis then
-                local angs = ctrl.driver:getEyeAngles():setP(0)
-                speed = axis:getRotated(angs) * 500
-            end
-            ctrl:setVelocity(speed)
-        end
-    end)
-
-    controller:addBind(IN_KEY.JUMP, function(ctrl)
-        if !ctrl:isOnGround() then return end
-        ctrl:addVelocity(Vector(0, 0, 1000))
-    end)]]
     return PlayerController
 else
     local PLAYER = player()
