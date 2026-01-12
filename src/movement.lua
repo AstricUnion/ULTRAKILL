@@ -4,7 +4,7 @@
 ---@include https://raw.githubusercontent.com/AstricUnion/Libs/refs/heads/main/tweens.lua as tweens
 ---@include astricunion/libs/sounds.lua
 ---@include ultrakill/libs/controller.lua
----@include ultrakill/src/model.lua
+---@include ultrakill/src/holos.lua
 ---@include ultrakill/src/hud.lua
 
 local astrosounds = require("astricunion/libs/sounds.lua")
@@ -66,13 +66,16 @@ if SERVER then
         local controller = PlayerController:new(pos, seat, CAMERAHEIGHT.DEFAULT, Vector(20, 20, 75))
         if !controller then return end
         controller.body:setHealth(100)
-        ---@module 'ultrakill.src.model'
-        local modelInfo = require("ultrakill/src/model.lua")
+        ---@module 'ultrakill.src.holos'
+        local modelInfo = require("ultrakill/src/holos.lua")
         ---@class V1Model
         local model = modelInfo[1]
         local animations = modelInfo[2]
         model.Main:setPos(pos)
         model.Main:setParent(controller.body)
+        model.Weapons.Revolver[1]:setPos(model.RightArm.Palm:getPos() + Vector(1, 0, -2))
+        model.Weapons.Revolver[1]:setAngles(Angle(80, 0, 0))
+        model.Weapons.Revolver[1]:setParent(model.RightArm.Palm)
         animations:play("idle")
         local obj = setmetatable(
             {
@@ -198,7 +201,7 @@ if SERVER then
                 end
             else
                 self.walljumpRemain = 3
-                if velocity.z < -80 and self.state ~= STATES.Slam then
+                if velocity.z < -150 and self.state ~= STATES.Slam then
                     astrosounds.play("land", Vector(), ctrl.body)
                 end
                 self.movementVelocity = math.lerpVector(0.5, self.movementVelocity, axisRotated * SPEED * delta)
@@ -330,7 +333,7 @@ if SERVER then
     return V1
 else
     require("ultrakill/libs/controller.lua")
-    require("ultrakill/src/model.lua")
+    require("ultrakill/src/holos.lua")
 
     local sounds = "https://raw.githubusercontent.com/AstricUnion/ULTRAKILL/refs/heads/main/sounds/"
     astrosounds.preload("jump", 1, false, false, sounds .. "Jump.mp3")
