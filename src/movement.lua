@@ -10,8 +10,8 @@
 local astrosounds = require("astricunion/libs/sounds.lua")
 
 -- Constants --
-local GRAVITY = 980
-local SPEED = 30000
+local GRAVITY = physenv.getGravity().z
+local SPEED = 20000
 local AIRSPEED = 500
 local SLIDESPEED = 50000
 local SLIDEMOVESPEED = 100
@@ -125,7 +125,7 @@ if SERVER then
                 obj:stopSlide(ctrl)
             end
         )
-        controller:addBind(IN_KEY.BULLRUSH, function(ctrl) print("jdlks") end)
+        -- controller:addBind(IN_KEY.BULLRUSH, function(ctrl) print("jdlks") end)
 
         return obj
     end
@@ -170,7 +170,7 @@ if SERVER then
         local isOnGround = ctrl:isOnGround()
         if !axis then
             if !isOnGround then
-                ctrl:addVelocity(Vector(0, 0, -GRAVITY * delta))
+                ctrl:addVelocity(Vector(0, 0, GRAVITY * delta))
             else
                 ctrl:setVelocity(Vector())
             end
@@ -189,16 +189,19 @@ if SERVER then
             self.dashRemain = math.min(self.dashRemain + delta, 3)
             local axisRotated = axis:getRotated(angs)
             local velocity = ctrl:getVelocity()
+
+            -- If in air
             if !isOnGround then
                 local pos = ctrl.body:getPos()
                 local res = trace.line(pos, pos + axisRotated * ctrl.size.x, {ctrl.body})
                 if !res.Hit or self.state == STATES.WallJump then
                     self.state = STATES.Idle
-                    ctrl:addVelocity(Vector(0, 0, -GRAVITY * delta) + axisRotated * AIRSPEED * delta)
+                    ctrl:addVelocity(Vector(0, 0, GRAVITY * delta) + axisRotated * AIRSPEED * delta)
                 else
                     self.state = STATES.Cling
-                    ctrl:setVelocity(Vector(0, 0, math.max(velocity.z - GRAVITY * delta, -CLINGSPEED * delta)))
+                    ctrl:setVelocity(Vector(0, 0, math.max(velocity.z + GRAVITY * delta, -CLINGSPEED * delta)))
                 end
+            -- If on ground
             else
                 self.walljumpRemain = 3
                 if velocity.z < -150 and self.state ~= STATES.Slam then
@@ -229,13 +232,14 @@ if SERVER then
 
         elseif self.state == STATES.Slide then
             local vel = ctrl:getVelocity()
-            if vel:getLength() < 200 then
+            local velZ = vel.z
+            if vel:setZ(0):getLength() < 280 then
                 self:stopSlide(ctrl)
                 return
             end
             local slide = self.slideDirection * SLIDESPEED * delta
             local move = (-angs:getRight() * axis.y * SLIDEMOVESPEED * delta)
-            local gravity = Vector(0, 0, vel.z - GRAVITY * delta)
+            local gravity = Vector(0, 0, velZ + GRAVITY * delta)
             ctrl:setVelocity(slide + move + gravity)
             self.model.Main:setLocalAngles(math.lerpAngle(0.2, self.model.Main:getLocalAngles(), self.slideDirection:getAngle()))
         end

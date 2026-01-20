@@ -9,7 +9,7 @@ local PlayerController = require("ultrakill/libs/controller.lua")
 
 if SERVER then
     -- Very easy controller example
-    local GRAVITY = 980
+    local GRAVITY = physenv.getGravity()
 
     local CHIPPOS = chip():getPos()
     local seat = prop.createSeat(CHIPPOS, Angle(), "models/nova/chair_plastic01.mdl", true)
@@ -19,7 +19,7 @@ if SERVER then
     controller:addOnTick("move", function(ctrl)
         if !ctrl.driver then return end
         if !ctrl:isOnGround() then
-            ctrl:addVelocity(Vector(0, 0, -GRAVITY * game.getTickInterval()))
+            ctrl:addVelocity(-GRAVITY * game.getTickInterval())
         else
             local speed = Vector()
             local axis = ctrl:getControlAxis()
