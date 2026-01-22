@@ -10,11 +10,11 @@
 local astrosounds = require("astricunion/libs/sounds.lua")
 
 -- Constants --
-local GRAVITY = physenv.getGravity().z
+local GRAVITY = physenv.getGravity().z * 1.5
 local SPEED = 20000
 local AIRSPEED = 500
 local SLIDESPEED = 50000
-local SLIDEMOVESPEED = 100
+local SLIDEMOVESPEED = 5000
 local DASHSPEED = 30000
 local DASHDURATION = 0.1
 local DASHJUMPSPEED = 800
@@ -356,9 +356,6 @@ else
 
     local hud = V1HUD:new()
     if !hud then return end
-    hook.add("RenderOffscreen", "", function()
-        hud:RenderOffscreen()
-    end)
 
     local function noDrawModel(modelTable, nodraw)
         for _, holo in pairs(modelTable) do
@@ -387,8 +384,11 @@ else
     hook.add("PlayerControllerCalcView", "V1", function(origin, angles)
         local slope = (PLAYER:keyDown(IN_KEY.MOVELEFT) and 1 or 0) - (PLAYER:keyDown(IN_KEY.MOVERIGHT) and 1 or 0)
         local angs = Angle(0, 0, slope * -1)
-        hud:CalcView(origin, angles)
         return origin + shakeOffset, angles + angs, 120
+    end)
+
+    hook.add("PostDrawTranslucentRenderables", "V1", function()
+        hud:PostDrawTranslucentRenderables()
     end)
 
     net.receive("shake", function()
