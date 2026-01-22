@@ -28,6 +28,7 @@ end
 
 
 ---@class V1HUD
+---@field stamina number
 local V1HUD = {}
 V1HUD.__index = V1HUD
 
@@ -38,7 +39,9 @@ V1HUD.__index = V1HUD
 ---  LATEST VERSION (2112.08.06)
 function V1HUD:new()
     return setmetatable(
-        {},
+        {
+            stamina = 3
+        },
         V1HUD
     )
 end
@@ -50,6 +53,35 @@ local COLORS = {
     bg = Color(0, 0, 0, 200)
 }
 
+
+function V1HUD:dash(stamina)
+    self.stamina = stamina
+end
+
+
+function V1HUD:pushMask(mask)
+    render.clearStencil()
+    render.setStencilEnable(true)
+    render.setStencilWriteMask(1)
+    render.setStencilTestMask(1)
+    render.setStencilFailOperation(STENCIL.REPLACE)
+    render.setStencilPassOperation(STENCIL.ZERO)
+    render.setStencilZFailOperation(STENCIL.ZERO)
+    render.setStencilCompareFunction(STENCIL.NEVER)
+    render.setStencilReferenceValue(1)
+    mask()
+    render.setStencilFailOperation(STENCIL.ZERO)
+    render.setStencilPassOperation(STENCIL.REPLACE)
+    render.setStencilZFailOperation(STENCIL.ZERO)
+    render.setStencilCompareFunction(STENCIL.EQUAL)
+    render.setStencilReferenceValue(1)
+end
+
+
+function V1HUD:popMask()
+    render.setStencilEnable(false)
+    render.clearStencil()
+end
 
 function V1HUD:PostDrawTranslucentRenderables()
     local pos = render.getEyePos()
@@ -66,13 +98,30 @@ function V1HUD:PostDrawTranslucentRenderables()
     do
         render.setColor(COLORS.bg)
         render.drawRectBevel(12, 0, 0, 512, 162)
-
+        render.drawRectBevel(12, 16, 22, 480, 56)
         render.setColor(COLORS.hp)
         render.drawRectBevel(12, 16, 22, 480, 56)
-        render.setColor(COLORS.stamina)
+
+        local gap = 8
+        local width = 154
+        self:pushMask(function()
+            for i=0,2 do
+                render.drawRectFast(16 + (i * (width + gap)), 82, width, 56)
+            end
+        end)
+        render.setColor(COLORS.bg)
         render.drawRectBevel(12, 16, 82, 480, 56)
+        render.setColor(COLORS.stamina)
+        render.drawRectBevel(12, 16, 82, 480 * (self.stamina / 3), 56)
+        self:popMask()
     end
     render.popMatrix()
+end
+
+function V1HUD:Think()
+    if self.stamina < 3 then
+        self.stamina = math.min(self.stamina + game.getRealTickInterval(), 3)
+    end
 end
 
 

@@ -246,6 +246,12 @@ if SERVER then
     end
 
 
+    function V1:sendDashRemain()
+        net.start("dash")
+        net.writeFloat(self.dashRemain)
+        net.send(self.controller.driver)
+    end
+
     function V1:jump(ctrl)
         if self.state ~= STATES.Cling and !ctrl:isOnGround() then return end
         self:stopSlide(ctrl)
@@ -255,6 +261,7 @@ if SERVER then
             self.state = STATES.Idle
             ctrl:setVelocity(self.dashDirection * DASHJUMPSPEED + Vector(0, 0, JUMP))
             self.dashRemain = self.dashRemain - 1
+            self:sendDashRemain()
 
         -- Slam jump
         elseif self.state == STATES.Slam then
@@ -331,6 +338,7 @@ if SERVER then
         )
         tw:start()
         self.dashRemain = self.dashRemain - 1
+        self:sendDashRemain()
         self.state = STATES.Dash
     end
 
@@ -391,6 +399,10 @@ else
         hud:PostDrawTranslucentRenderables()
     end)
 
+    hook.add("Think", "V1", function()
+        hud:Think()
+    end)
+
     net.receive("shake", function()
         timer.create("shake", 0.01, 5, function()
             shakeOffset = Vector(math.rand(-1, 1), math.rand(-1, 1), math.rand(-1, 1)) * 3
@@ -398,5 +410,9 @@ else
         timer.simple(0.02 * 8, function()
             shakeOffset = Vector()
         end)
+    end)
+
+    net.receive("dash", function()
+        hud:dash(net.readFloat())
     end)
 end
