@@ -3,8 +3,6 @@
 ---@shared
 
 
--- TODO: Bring this to hologram
-
 
 if SERVER then
 
@@ -63,7 +61,6 @@ if SERVER then
         constraint.keepupright(body, Angle(), 0, 5000)
         local physobj = body:getPhysicsObject()
         physobj:setMass(1000)
-        physobj:setDamping(0, 5000)
         physobj:enableGravity(false)
         physobj:setMaterial("Player")
         physobj:addGameFlags(1024) -- no impact damage
@@ -106,10 +103,10 @@ if SERVER then
     ---@return boolean
     function PlayerController:isOnGroundTrace()
         local pos = self.body:getPos()
-        local velo = self.body:getVelocity()
+        local velocity = self:getVelocity()
         local res = trace.hull(
             pos,
-            pos + Vector(0, 0, (math.min(velo.z, 0) / 73) - 5),
+            pos + Vector(0, 0, math.min(velocity.z / 73, 0) - 5),
             self.box[1],
             Vector(self.box[2].x, self.box[2].y, 0),
             {self.body},
@@ -150,7 +147,7 @@ if SERVER then
     ----- CALLBACKS -----
     
     ---Add bind to key
-    ---@param key IN_KEY
+    ---@param key IN
     ---@param press? fun(self: PlayerController)
     ---@param release? fun(self: PlayerController)
     function PlayerController:addBind(key, press, release)
@@ -254,7 +251,7 @@ if SERVER then
         self.driver = ply
         enableHud(ply, true)
         ply:setViewEntity(self.camera)
-        net.start("PlayerControllerCamera")
+        net.start("PlayerControllerActivate")
             net.writeEntity(self.body)
             net.writeInt(self.cameraHeight, 16)
         net.send(self.driver)
@@ -269,6 +266,8 @@ if SERVER then
         self.driver = nil
         ply:setViewEntity(nil)
         enableHud(ply, false)
+        net.start("PlayerControllerDeactivate")
+        net.send(self.driver)
         for _, func in pairs(self.onLeave) do
             func(self, ply)
         end
@@ -297,10 +296,10 @@ else
     local PLAYER = player()
     local cameraHeight
 
-    net.receive("PlayerControllerCamera", function()
+    net.receive("PlayerControllerActivate", function()
         net.readEntity(function(ent)
             cameraHeight = net.readInt(16)
-            hook.add("CalcView", "", function(_, _, fov)
+            hook.add("CalcView", "PlayerController", function(_, _, fov)
                 local pos = ent:getPos() + Vector(0, 0, cameraHeight)
                 local ang = PLAYER:getEyeAngles()
                 local origin, angles, hookFov = hook.run("PlayerControllerCalcView", pos, ang)
@@ -310,8 +309,16 @@ else
                     fov = hookFov or fov
                 }
             end)
+
             hook.run("PlayerControllerActivate", ent)
         end)
+    end)
+
+    net.receive("PlayerControllerDeactivate", function()
+        hook.remove("CalcView", "PlayerController")
+        cameraHeight = nil
+
+        hook.run("PlayerControllerDeactivate")
     end)
 
     net.receive("PlayerControllerSetCameraHeight", function()

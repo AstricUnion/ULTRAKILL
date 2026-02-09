@@ -96,7 +96,16 @@ if SERVER then
             },
             V1
         )
-        controller:addOnTick("movement", function(ctrl, delta) obj:movement(ctrl, delta) end)
+        local id = "V1" .. tostring(controller.body:entIndex())
+        hook.add("PostEntityTakeDamage", id, function(target, _, _, amount)
+            if target ~= controller.body or !controller.driver then return end
+            local current = controller.body:getHealth() - amount
+            controller.body:setHealth(current)
+            net.start("hp")
+                net.writeInt(current, 8)
+            net.send(controller.driver)
+        end)
+        controller:addOnTick("movement", function(ctrl, delta) obj:tick(ctrl, delta) end)
 
         controller:addOnEnter("enter", function(_, ply)
             net.start("StartV1")
@@ -104,13 +113,20 @@ if SERVER then
             net.send(ply)
         end)
 
-        controller:addOnLeave("enter", function(_, ply)
+        controller:addOnLeave("leave", function(_, ply)
             net.start("StopV1")
             net.send(ply)
         end)
 
         controller:addBind(IN_KEY.JUMP, function(ctrl) obj:jump(ctrl) end)
         controller:addBind(IN_KEY.SPEED, function(ctrl) obj:dash(ctrl) end)
+        local function movement(ctrl)
+            obj:tick(ctrl, game.getTickInterval())
+        end
+        controller:addBind(IN_KEY.FORWARD, movement)
+        controller:addBind(IN_KEY.MOVELEFT, movement)
+        controller:addBind(IN_KEY.MOVERIGHT, movement)
+        controller:addBind(IN_KEY.BACK, movement)
 
         controller:addBind(
             IN_KEY.DUCK,
@@ -165,7 +181,69 @@ if SERVER then
     end
 
 
-    function V1:movement(ctrl, delta)
+    function V1:slide(ctrl, delta, angs, axis)
+        local vel = ctrl:getVelocity()
+        local velZ = vel.z
+        local slide = self.slideDirection * SLIDESPEED * delta
+        if vel:setZ(0):getLength() < slide:getLength() * math.sin(math.pi) then
+            self:stopSlide(ctrl)
+            return
+        end
+        local move = (-angs:getRight() * axis.y * SLIDEMOVESPEED * delta)
+        local gravity = Vector(0, 0, velZ + GRAVITY * delta)
+        ctrl:setVelocity(slide + move + gravity)
+        self.model.Main:setLocalAngles(math.lerpAngle(0.2, self.model.Main:getLocalAngles(), self.slideDirection:getAngle()))
+    end
+
+
+    function V1:movement(ctrl, delta, angs, axis, isOnGround)
+        self.dashRemain = math.min(self.dashRemain + delta, 3)
+        local axisRotated = axis:getRotated(angs)
+        local velocity = ctrl:getVelocity()
+
+        -- If in air
+        if !isOnGround then
+            local pos = ctrl.body:getPos()
+            local res = trace.line(pos, pos + axisRotated * ctrl.size.x, {ctrl.body})
+            if !res.Hit or self.state == STATES.WallJump then
+                self.state = STATES.Idle
+                ctrl:addVelocity(Vector(0, 0, GRAVITY * delta) + axisRotated * AIRSPEED * delta)
+            else
+                self.state = STATES.Cling
+                ctrl:setVelocity(Vector(0, 0, math.max(velocity.z + GRAVITY * delta, -CLINGSPEED * delta)))
+            end
+        -- If on ground
+        else
+            self.walljumpRemain = 3
+            if velocity.z < -150 and self.state ~= STATES.Slam then
+                astrosounds.play("land", Vector(), ctrl.body)
+            end
+            self.movementVelocity = math.lerpVector(0.5, self.movementVelocity, axisRotated * SPEED * delta)
+            ctrl:setVelocity(self.movementVelocity)
+            if !axisRotated:isZero() and self.animations:get() ~= "movement" then
+                self.animations:play("movement", {function()
+                    local dir = ctrl:getControlAxis()
+                    if !dir then return Angle() end
+                    return dir:setX(math.abs(dir.x)):getAngle()
+                end})
+            elseif axisRotated:isZero() and self.animations:get() == "movement" then
+                self.animations:play("idle")
+            end
+        end
+        local newAngs = math.lerpAngle(0.2, self.model.Main:getLocalAngles(), angs)
+        self.model.Main:setLocalAngles(newAngs)
+        local velo = velocity:getRotated(newAngs:setY(-newAngs.y))
+        local ang = Angle(0, velo.x / 20, velo.z / -50)
+        for i, wing in ipairs(self.model.LeftWings) do
+            wing:setLocalAngles(ang / i)
+        end
+        for i, wing in ipairs(self.model.RightWings) do
+            wing:setLocalAngles(ang / -i)
+        end
+    end
+
+
+    function V1:tick(ctrl, delta)
         local axis = ctrl:getControlAxis()
         local isOnGround = ctrl:isOnGround()
         if !axis then
@@ -186,62 +264,9 @@ if SERVER then
         self.model.RightArm.Leverage:setAngles(handAng + Angle(-90, 0, 0))
 
         if self.state == STATES.Idle or self.state == STATES.Cling or self.state == STATES.WallJump then
-            self.dashRemain = math.min(self.dashRemain + delta, 3)
-            local axisRotated = axis:getRotated(angs)
-            local velocity = ctrl:getVelocity()
-
-            -- If in air
-            if !isOnGround then
-                local pos = ctrl.body:getPos()
-                local res = trace.line(pos, pos + axisRotated * ctrl.size.x, {ctrl.body})
-                if !res.Hit or self.state == STATES.WallJump then
-                    self.state = STATES.Idle
-                    ctrl:addVelocity(Vector(0, 0, GRAVITY * delta) + axisRotated * AIRSPEED * delta)
-                else
-                    self.state = STATES.Cling
-                    ctrl:setVelocity(Vector(0, 0, math.max(velocity.z + GRAVITY * delta, -CLINGSPEED * delta)))
-                end
-            -- If on ground
-            else
-                self.walljumpRemain = 3
-                if velocity.z < -150 and self.state ~= STATES.Slam then
-                    astrosounds.play("land", Vector(), ctrl.body)
-                end
-                self.movementVelocity = math.lerpVector(0.5, self.movementVelocity, axisRotated * SPEED * delta)
-                ctrl:setVelocity(self.movementVelocity)
-                if !axisRotated:isZero() and self.animations:get() ~= "movement" then
-                    self.animations:play("movement", {function()
-                        local dir = ctrl:getControlAxis()
-                        if !dir then return Angle() end
-                        return dir:setX(math.abs(dir.x)):getAngle()
-                    end})
-                elseif axisRotated:isZero() and self.animations:get() == "movement" then
-                    self.animations:play("idle")
-                end
-            end
-            local newAngs = math.lerpAngle(0.2, self.model.Main:getLocalAngles(), angs)
-            self.model.Main:setLocalAngles(newAngs)
-            local velo = velocity:getRotated(newAngs:setY(-newAngs.y))
-            local ang = Angle(0, velo.x / 20, velo.z / -50)
-            for i, wing in ipairs(self.model.LeftWings) do
-                wing:setLocalAngles(ang / i)
-            end
-            for i, wing in ipairs(self.model.RightWings) do
-                wing:setLocalAngles(ang / -i)
-            end
-
+            self:movement(ctrl, delta, angs, axis, isOnGround)
         elseif self.state == STATES.Slide then
-            local vel = ctrl:getVelocity()
-            local velZ = vel.z
-            if vel:setZ(0):getLength() < 280 then
-                self:stopSlide(ctrl)
-                return
-            end
-            local slide = self.slideDirection * SLIDESPEED * delta
-            local move = (-angs:getRight() * axis.y * SLIDEMOVESPEED * delta)
-            local gravity = Vector(0, 0, velZ + GRAVITY * delta)
-            ctrl:setVelocity(slide + move + gravity)
-            self.model.Main:setLocalAngles(math.lerpAngle(0.2, self.model.Main:getLocalAngles(), self.slideDirection:getAngle()))
+            self:slide(ctrl, delta, angs, axis)
         end
     end
 
@@ -257,7 +282,8 @@ if SERVER then
         self:stopSlide(ctrl)
 
         -- Dash jump
-        if self.state == STATES.Dash and self.dashRemain > 1 then
+        if self.state == STATES.Dash then
+            if self.dashRemain < 2 then return end
             self.state = STATES.Idle
             ctrl:setVelocity(self.dashDirection * DASHJUMPSPEED + Vector(0, 0, JUMP))
             self.dashRemain = self.dashRemain - 1
@@ -392,7 +418,7 @@ else
     hook.add("PlayerControllerCalcView", "V1", function(origin, angles)
         local slope = (PLAYER:keyDown(IN_KEY.MOVELEFT) and 1 or 0) - (PLAYER:keyDown(IN_KEY.MOVERIGHT) and 1 or 0)
         local angs = Angle(0, 0, slope * -1)
-        return origin + shakeOffset, angles + angs, 120
+        return origin + shakeOffset, angles + angs, 100
     end)
 
     hook.add("PostDrawTranslucentRenderables", "V1", function()
@@ -414,5 +440,9 @@ else
 
     net.receive("dash", function()
         hud:dash(net.readFloat())
+    end)
+
+    net.receive("hp", function()
+        hud:setHP(net.readInt(8))
     end)
 end

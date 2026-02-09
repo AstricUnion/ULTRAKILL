@@ -2,26 +2,25 @@
 ---@author AstricUnion
 ---@client
 
-local function bevelXY(size, x, y, xd, yd)
-    return { {x = x, y = y + yd * size}, {x = x + xd * size, y = y} }
+local function bevelXY(size, x, y, xd, yd, mirror)
+    local coords = { {x = x, y = y + yd * size}, {x = x + xd * size, y = y} }
+    if mirror then
+        coords[1], coords[2] = coords[2], coords[1]
+    end
+    return coords
 end
 
 function render.drawRectBevel(size, x, y, w, h)
     local x2, y2 = x + w, y + h
     local bevels = {
-        bevelXY(size, x, y, 1, 1),
-        bevelXY(size, x2, y, -1, 1),
-        bevelXY(size, x2, y2, -1, -1),
-        bevelXY(size, x, y2, 1, -1),
+        bevelXY(size, x, y, 1, 1, false),
+        bevelXY(size, x2, y, -1, 1, true),
+        bevelXY(size, x2, y2, -1, -1, false),
+        bevelXY(size, x, y2, 1, -1, true),
     }
     local polys = {}
-    for bevelId, bevel in ipairs(bevels) do
-        local i = #polys+1
-        if bevelId % 2 == 0 then
-            polys[i], polys[i+1] = bevel[2], bevel[1]
-        else
-            polys[i], polys[i+1] = bevel[1], bevel[2]
-        end
+    for _, bevel in ipairs(bevels) do
+        polys = table.add(polys, bevel)
     end
     render.drawPoly(polys)
 end
@@ -40,7 +39,9 @@ V1HUD.__index = V1HUD
 function V1HUD:new()
     return setmetatable(
         {
-            stamina = 3
+            stamina = 3,
+            hp = 100,
+            currentHp = 100
         },
         V1HUD
     )
@@ -56,6 +57,10 @@ local COLORS = {
 
 function V1HUD:dash(stamina)
     self.stamina = stamina
+end
+
+function V1HUD:setHP(hp)
+    self.hp = hp
 end
 
 
@@ -88,9 +93,9 @@ function V1HUD:PostDrawTranslucentRenderables()
     local ang = render.getAngles()
     local m = Matrix(
         ang + Angle(-90, 0, 20),
-        pos + ang:getForward() * 60
-            + ang:getRight() * -100
-            + ang:getUp() * -50
+        pos + ang:getForward() * 100
+            + ang:getRight() * -120
+            + ang:getUp() * -60
     )
     m:setScale(Vector(0.1, -0.1))
     m:rotate(Angle(0, 90, 0))
@@ -98,21 +103,27 @@ function V1HUD:PostDrawTranslucentRenderables()
     do
         render.setColor(COLORS.bg)
         render.drawRectBevel(12, 0, 0, 512, 162)
-        render.drawRectBevel(12, 16, 22, 480, 56)
-        render.setColor(COLORS.hp)
-        render.drawRectBevel(12, 16, 22, 480, 56)
+        render.drawRectBevel(12, 528, 0, 162, 162)
+        render.drawRectBevel(12, 0, -528, 528, 528)
 
         local gap = 8
         local width = 154
         self:pushMask(function()
+            render.drawRectBevel(12, 16, 22, 480, 56)
             for i=0,2 do
                 render.drawRectFast(16 + (i * (width + gap)), 82, width, 56)
             end
         end)
-        render.setColor(COLORS.bg)
-        render.drawRectBevel(12, 16, 82, 480, 56)
-        render.setColor(COLORS.stamina)
-        render.drawRectBevel(12, 16, 82, 480 * (self.stamina / 3), 56)
+            render.setColor(COLORS.bg)
+            render.drawRectBevel(12, 16, 82, 480, 56)
+            render.drawRectBevel(12, 16, 22, 480, 56)
+
+            render.setColor(COLORS.hp)
+            self.currentHp = math.lerp(0.2, self.currentHp, self.hp)
+            render.drawRectBevel(12, 16, 22, 480 * (self.currentHp / 100), 56)
+
+            render.setColor(COLORS.stamina)
+            render.drawRectBevel(12, 16, 82, 480 * (self.stamina / 3), 56)
         self:popMask()
     end
     render.popMatrix()
