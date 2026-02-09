@@ -10,15 +10,15 @@ local Rig = holos.Rig
 local Holo = holos.Holo
 local SubHolo = holos.SubHolo
 
----@class Model
----@module 'controller'
+---@class models
+---@module 'libs.model'
 ---@include ultrakill/libs/model.lua
-local Model = require("ultrakill/libs/model.lua")
+local models = require("ultrakill/libs/model.lua")
 
 
-local model = Model:new(function()
+models.register("prism_on_cube", function()
         local body = {
-            main = Rig(),
+            origin = Rig(),
             bone1 = hologram.createPart(
                 Rig(),
                 Holo(SubHolo(nil, nil, "models/holograms/cube.mdl"))
@@ -32,5 +32,5 @@ local model = Model:new(function()
         body.bone2:setParent(body.bone1)
         return body
     end)
-    :addAnimation("test", function()
+    :addAnimation(0, function()
     end)
