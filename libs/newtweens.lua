@@ -130,11 +130,12 @@ local function linear(x) return x end
 ---@param startAt number Second to start parameter tweening from
 ---@param endAt number Second to end parameter tweening
 ---@param property Property Property to tween
----@param to any | fun() Goal to tween
+---@param from any | fun() Start values to tween
+---@param to any | fun() Goal for tween
 ---@param easing? fun(x: number): number Function, that gets 0 to 1 on input and gives eased value. Nil to linear
 ---@param process? fun(self: Tween, eased: number) Process callback (on every Think)
 ---@param onEnd? fun(self: Tween) Callback on parameter ending
-function Param:new(ent, startAt, endAt, property, to, easing, process, onEnd)
+function Param:new(ent, startAt, endAt, property, from, to, easing, process, onEnd)
     return setmetatable(
         {
             ent = ent,
@@ -142,7 +143,7 @@ function Param:new(ent, startAt, endAt, property, to, easing, process, onEnd)
             endAt = endAt,
             duration = endAt - startAt,
             property = property,
-            from = property.get(ent),
+            from = from,
             to = to,
             easing = easing or linear,
             process = process,
@@ -167,21 +168,32 @@ end
 
 ---[SHARED] Class to tween parameters
 ---@class Tween
----@field params table
+---@field params table<string, TweenElement>
 ---@field process number Process of the tween (in seconds)
+---@field paused boolean Is tween paused. Default true
 local Tween = {}
 Tween.__index = Tween
 Tween.__call = Tween.new
 
 
 ---[SHARED] Create new tween
----@param ... Param
+---@param ... TweenElement
 ---@return Tween
 function Tween:new(...)
+    local params = {...}
+    local duration = 0
+    for _, v in ipairs(params) do
+        local endAt = v.endAt
+        if endAt <= duration then goto cont end
+        duration = endAt
+        ::cont::
+    end
     return setmetatable(
         {
-            params = {...},
-            process = 0
+            params = params,
+            duration = duration,
+            process = 0,
+            paused = true
         },
         Tween
     )
@@ -189,16 +201,38 @@ end
 
 
 function Tween:update()
+    if self.paused then return end
     local process = self.process
-    process = process + game.getTickInterval()
     for _, v in ipairs(self.params) do
-        process = process - v.startAt
+        local relativeProcess = process - v.startAt
+        if relativeProcess < 0 then goto cont end
         local duration = v.duration
-        if process >= duration then return end
-        if process < 0 then return end
-        v:update(process)
+        if relativeProcess >= duration then goto cont end
+        v:update(relativeProcess)
+        ::cont::
     end
+    process = process + game.getTickInterval()
     self.process = process
+end
+
+
+---[SHARED] Start tween
+function Tween:start()
+    self.paused = false
+    self:update()
+end
+
+
+---[SHARED] Reset tween process 
+function Tween:reset()
+    self.process = 0
+    self:update()
+end
+
+
+---[SHARED] Pause tween
+function Tween:stop()
+    self.paused = true
 end
 
 
@@ -207,9 +241,10 @@ local holo = hologram.create(startPos, Angle(), "models/holograms/cube.mdl")
 if !holo then return end
 
 local tw = Tween:new(
-    Param:new(holo, 0, 5, PROPERTY.ANGLES, Angle(53, 98, 62), math.easeInOutCubic),
-    Param:new(holo, 5, 10, PROPERTY.POS, startPos + Vector(0, 50, 0), math.easeInOutBack)
+    Param:new(holo, 0, 5, PROPERTY.ANGLES, Angle(), Angle(53, 98, 62), math.easeInOutCubic),
+    Param:new(holo, 5, 10, PROPERTY.POS, startPos, startPos + Vector(0, 50, 0), math.easeInOutBack)
 )
+tw:start()
 
 hook.add("Think", "AUTweenThink", function()
     tw:update()
