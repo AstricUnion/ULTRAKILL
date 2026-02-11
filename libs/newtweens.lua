@@ -2,68 +2,116 @@
 ---@author AstricUnion
 ---@server
 
+---@alias propGet fun(ent: Hologram): any
+---@alias propSet fun(ent: Hologram, value: any)
+
+---@class Property
+---@field get propGet
+---@field set propSet
+local Property = {}
+Property.__index = Property
+
+---@param get propGet
+---@param set propSet
+function Property:new(get, set)
+    return setmetatable(
+        {
+            get = get,
+            set = set
+        },
+        Property
+    )
+end
+
 
 ---@enum PROPERTY
-PROPERTY = {
-    NONE = {
+local PROPERTY = {
+    NONE = Property:new(
         function() end,
         function() end
-    },
-    POS = {
+    ),
+    POS = Property:new(
         function(x) return x:getPos() end,
         function(x, set) x:setPos(set) end
-    },
-    ANGLES = {
+    ),
+    ANGLES = Property:new(
         function(x) return x:getAngles() end,
         function(x, set) x:setAngles(set) end
-    },
-    LOCALPOS = {
+    ),
+    LOCALPOS = Property:new(
         function(x) return x:getLocalPos() end,
         function(x, set) x:setLocalPos(set) end
-    },
-    LOCALANGLES = {
+    ),
+    LOCALANGLES = Property:new(
         function(x) return x:getLocalAngles() end,
         function(x, set) x:setLocalAngles(set) end
-    },
-    COLOR = {
+    ),
+    COLOR = Property:new(
         function(x) return x:getColor() end,
         function(x, set) x:setColor(set) end
-    },
-    SCALE = {
+    ),
+    SCALE = Property:new(
         function(x) return x:getScale() end,
         function(x, set) x:setScale(set) end
-    },
-    ANGULARVELOCITY = {
+    ),
+    ANGULARVELOCITY = Property:new(
         function(x) return x:getAngleVelocity() end,
         function(x, set) x:setAngleVelocity(set) end
-    },
+    ),
     -- Only with holograms!
-    LOCALANGULARVELOCITY = {
+    LOCALANGULARVELOCITY = Property:new(
         function(x) return x.angular end,
         function(x, set)
             if !x.angular then x.angular = Vector() end
             x:setLocalAngularVelocity(set)
             x.angular = set
         end
-    },
-    VELOCITY = {
+    ),
+    VELOCITY = Property:new(
         function(x) return x:getVelocity() end,
         function(x, set) x:setVelocity(set) end
-    },
-    ADDVELOCITY = {
+    ),
+    ADDVELOCITY = Property:new(
         function(x) return x:getVelocity() end,
         function(x, set) x:addVelocity(set) end
-    }
+    )
 }
 
 
+---[SHARED] Base tween element
+---@class TweenElement
+---@field startAt number Second to start element from
+---@field endAt number Second to end element
+---@field duration number Element duration (endAt - startAt)
+local TweenElement = {}
+TweenElement.__index = TweenElement
+
+
+---[SHARED] Create new base element (this is a empty element to inherit)
+---@param startAt number
+---@param endAt number
+---@return TweenElement
+function TweenElement:new(startAt, endAt)
+    return setmetatable(
+        {
+            startAt = startAt,
+            endAt = endAt,
+            duration = endAt - startAt
+        },
+        TweenElement
+    )
+end
+
+
+---[INTERNAL] Function to update element
+---@param process number Relative number to process element, in seconds
+function TweenElement:update(process) end
+
+
 ---[SHARED] Parameter class, to store data about tweening element
----@class Param
----@field ent Entity Entity to perform tweening
----@field startAt number Second to start parameter tweening from
----@field endAt number Second to end parameter tweening
----@field duration number Tweening duration
----@field property PROPERTY Property to tween
+---@class Param: TweenElement
+---@field ent Hologram to perform tweening
+---@field property Property Property to tween
 ---@field from any Property from
 ---@field to any | fun() Goal to tween
 ---@field easing? fun(x: number): number Function, that gets 0 to 1 on input and gives eased value. Nil to linear
@@ -78,10 +126,10 @@ local function linear(x) return x end
 
 
 ---[SHARED] Create new parameter
----@param ent Entity Entity to perform tweening
+---@param ent Hologram Entity to perform tweening
 ---@param startAt number Second to start parameter tweening from
 ---@param endAt number Second to end parameter tweening
----@param property PROPERTY Property to tween
+---@param property Property Property to tween
 ---@param to any | fun() Goal to tween
 ---@param easing? fun(x: number): number Function, that gets 0 to 1 on input and gives eased value. Nil to linear
 ---@param process? fun(self: Tween, eased: number) Process callback (on every Think)
@@ -94,7 +142,7 @@ function Param:new(ent, startAt, endAt, property, to, easing, process, onEnd)
             endAt = endAt,
             duration = endAt - startAt,
             property = property,
-            from = property[1](ent),
+            from = property.get(ent),
             to = to,
             easing = easing or linear,
             process = process,
@@ -108,19 +156,12 @@ end
 ---[SHARED] Update a parameter with a process value
 ---@param process number
 function Param:update(process)
-    process = process - self.startAt
-    local duration = self.duration
-    if process >= duration then return end
-    if process < 0 then return end
     local startValue = self.from
     local toVal = self.to
     local endValue = isfunction(toVal) and toVal() or toVal
     local change = endValue - startValue
-    if self.endAt == 3  then
-        print(process, duration)
-    end
-    local eased = startValue + change * self.easing(process / duration)
-    self.property[2](self.ent, eased)
+    local eased = startValue + change * self.easing(process / self.duration)
+    self.property.set(self.ent, eased)
 end
 
 
@@ -133,6 +174,9 @@ Tween.__index = Tween
 Tween.__call = Tween.new
 
 
+---[SHARED] Create new tween
+---@param ... Param
+---@return Tween
 function Tween:new(...)
     return setmetatable(
         {
@@ -148,6 +192,10 @@ function Tween:update()
     local process = self.process
     process = process + game.getTickInterval()
     for _, v in ipairs(self.params) do
+        process = process - v.startAt
+        local duration = v.duration
+        if process >= duration then return end
+        if process < 0 then return end
         v:update(process)
     end
     self.process = process
@@ -159,11 +207,11 @@ local holo = hologram.create(startPos, Angle(), "models/holograms/cube.mdl")
 if !holo then return end
 
 local tw = Tween:new(
-    Param:new(holo, 1, 5, PROPERTY.ANGLES, Angle(53, 98, 62), math.easeInOutCubic),
-    Param:new(holo, 1, 3, PROPERTY.POS, startPos + Vector(0, 50, 0), math.easeInOutBack)
+    Param:new(holo, 0, 5, PROPERTY.ANGLES, Angle(53, 98, 62), math.easeInOutCubic),
+    Param:new(holo, 5, 10, PROPERTY.POS, startPos + Vector(0, 50, 0), math.easeInOutBack)
 )
 
-hook.add("Think", "", function()
+hook.add("Think", "AUTweenThink", function()
     tw:update()
 end)
 
