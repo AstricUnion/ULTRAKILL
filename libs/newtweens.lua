@@ -2,6 +2,12 @@
 ---@author AstricUnion
 ---@server
 
+---Control class for tweens
+---@class tweens
+local tweens = {}
+tweens.runned = {}
+
+
 ---@alias propGet fun(ent: Hologram): any
 ---@alias propSet fun(ent: Hologram, value: any)
 
@@ -115,8 +121,8 @@ function TweenElement:update(process) end
 ---@field from any Property from
 ---@field to any | fun() Goal to tween
 ---@field easing? fun(x: number): number Function, that gets 0 to 1 on input and gives eased value. Nil to linear
----@field process? fun(self: Tween, eased: number) Process callback (on every Think)
----@field onEnd? fun(self: Tween) Callback on parameter ending
+---@field process? fun(eased: number) Process callback (on every Think)
+---@field onEnd? fun() Callback on parameter ending
 local Param = {}
 Param.__index = Param
 Param.__call = Param.new
@@ -130,11 +136,11 @@ local function linear(x) return x end
 ---@param startAt number Second to start parameter tweening from
 ---@param endAt number Second to end parameter tweening
 ---@param property Property Property to tween
----@param from any | fun() Start values to tween
+---@param from any | fun() | nil Start values to tween. Default gets position on start
 ---@param to any | fun() Goal for tween
 ---@param easing? fun(x: number): number Function, that gets 0 to 1 on input and gives eased value. Nil to linear
----@param process? fun(self: Tween, eased: number) Process callback (on every Think)
----@param onEnd? fun(self: Tween) Callback on parameter ending
+---@param process? fun(eased: number) Process callback (on every Think)
+---@param onEnd? fun() Callback on parameter ending
 function Param:new(ent, startAt, endAt, property, from, to, easing, process, onEnd)
     return setmetatable(
         {
@@ -143,7 +149,7 @@ function Param:new(ent, startAt, endAt, property, from, to, easing, process, onE
             endAt = endAt,
             duration = endAt - startAt,
             property = property,
-            from = from,
+            from = from or property.get(ent),
             to = to,
             easing = easing or linear,
             process = process,
@@ -154,15 +160,22 @@ function Param:new(ent, startAt, endAt, property, from, to, easing, process, onE
 end
 
 
----[SHARED] Update a parameter with a process value
+---[INTERNAL] Update a parameter with a process value
 ---@param process number
 function Param:update(process)
-    local startValue = self.from
+    self.from = self.from or self.property.get(self.ent)
+    local fromVal = self.from
+    local startValue = isfunction(fromVal) and fromVal() or fromVal
     local toVal = self.to
     local endValue = isfunction(toVal) and toVal() or toVal
     local change = endValue - startValue
-    local eased = startValue + change * self.easing(process / self.duration)
-    self.property.set(self.ent, eased)
+    local eased = self.easing(process / self.duration)
+    local tweened = startValue + change * eased
+    self.property.set(self.ent, tweened)
+    local proc = self.process
+    if proc then
+        proc(eased)
+    end
 end
 
 
@@ -170,7 +183,9 @@ end
 ---@class Tween
 ---@field params table<string, TweenElement>
 ---@field process number Process of the tween (in seconds)
+---@field duration number Duration of the tween
 ---@field paused boolean Is tween paused. Default true
+---@field isFinished boolean Is tween already finished 
 local Tween = {}
 Tween.__index = Tween
 Tween.__call = Tween.new
@@ -188,21 +203,29 @@ function Tween:new(...)
         duration = endAt
         ::cont::
     end
-    return setmetatable(
+    local obj = setmetatable(
         {
             params = params,
             duration = duration,
             process = 0,
-            paused = true
+            paused = true,
+            isFinished = false
         },
         Tween
     )
+    tweens.runned[#tweens.runned+1] = obj
+    return obj
 end
 
 
 function Tween:update()
     if self.paused then return end
     local process = self.process
+    if process >= self.duration then
+        self.paused = true
+        self.isFinished = true
+        return
+    end
     for _, v in ipairs(self.params) do
         local relativeProcess = process - v.startAt
         if relativeProcess < 0 then goto cont end
@@ -218,6 +241,7 @@ end
 
 ---[SHARED] Start tween
 function Tween:start()
+    if self.isFinished then return end
     self.paused = false
     self:update()
 end
@@ -226,6 +250,7 @@ end
 ---[SHARED] Reset tween process 
 function Tween:reset()
     self.process = 0
+    self.isFinished = false
     self:update()
 end
 
@@ -236,17 +261,29 @@ function Tween:stop()
 end
 
 
-local startPos = chip():getPos() + Vector(0, 0, 10)
-local holo = hologram.create(startPos, Angle(), "models/holograms/cube.mdl")
-if !holo then return end
+---[SHARED] Remove tween
+function Tween:remove()
+    table.removeByValue(tweens.runned, self)
+    setmetatable(self, nil)
+end
 
-local tw = Tween:new(
-    Param:new(holo, 0, 5, PROPERTY.ANGLES, Angle(), Angle(53, 98, 62), math.easeInOutCubic),
-    Param:new(holo, 5, 10, PROPERTY.POS, startPos, startPos + Vector(0, 50, 0), math.easeInOutBack)
-)
-tw:start()
 
 hook.add("Think", "AUTweenThink", function()
-    tw:update()
+    for _, tw in ipairs(tweens.runned) do
+        tw:update()
+    end
 end)
 
+
+---Create new tween with elements
+---@param ... TweenElement
+---@return Tween
+function tweens.new(...)
+    return Tween:new(...)
+end
+
+tweens.Param = Param
+tweens.TweenElement = TweenElement
+tweens.PROPERTY = PROPERTY
+
+return tweens
